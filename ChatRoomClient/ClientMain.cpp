@@ -11,20 +11,27 @@ using namespace std;
 #define SERVER_PORT 9909
 #define RECONNECT_WAIT_MS 5000
 
+#define BUFF_SIZE 1024
 #define ACCOUNT_SIZE 50
 #define PASSWORD_SIZE 50
 #define LOGIN_PACKET_SIZE 6 + ACCOUNT_SIZE + PASSWORD_SIZE
 
 
 
-enum packetId
+enum sendPacketId
 {
 	checkStatus,
-	login,
+	sendLoginData,
 	getChatRoomList,
 	sendChatRoomMessage
 };
-
+enum receivePacketId
+{
+	returnStatus,
+	successOrFailure,
+	ChatRoomList,
+	ChatRoomMessage
+};
 enum status
 {
 	connecting,
@@ -41,89 +48,20 @@ char to_char(int n)
 	return '0' + n;
 }
 
-int to_int(const char* c)
+int to_int(const char* c, int cLen)
 {
-	int cLen = sizeof(c) / sizeof(char);
-	int result = 0;
+	int int_c = 0;
 
 	for (int i = 0; i < cLen; i++)
 	{
-		result *= 10;
-		result += c[i];
+		int_c *= 10;
+		int_c += c[i] - '0';
 	}
 
-	return result;
+	return int_c;
 }
 #pragma endregion
 
-
-#pragma region Status
-void reconnectErrorPrint(string errorFunctionName)
-{
-	cerr << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
-	cerr << "Reconnecting..." << endl;
-	Sleep(RECONNECT_WAIT_MS);
-}
-
-void exitProgram()
-{
-	exit(0);
-}
-
-bool connectToServer(SOCKET clientSocket, const sockaddr* serverAddr)
-{
-	system("cls");
-
-	int returnValue = connect(clientSocket, serverAddr, sizeof(serverAddr));
-	if (returnValue == SOCKET_ERROR)
-	{
-		reconnectErrorPrint("connect");
-		return false;
-	}
-
-	return true;
-}
-
-bool login(SOCKET clientSocket)
-{
-	char* packetBuff = new char[LOGIN_PACKET_SIZE] { 0 }, //packet_id + account + accountSize + password + passwordSize + endingChar
-		* account = new char[ACCOUNT_SIZE] { 0 },
-		* password = new char[PASSWORD_SIZE] { 0 };
-
-	cout << "Account: ";
-	cin.getline(account, ACCOUNT_SIZE);
-	cout << "Password: ";
-	cin.getline(password, PASSWORD_SIZE);
-
-	int packetLen = toLoginPacket(account, password, packetBuff);
-
-	cout << packetBuff << endl;
-
-	if (!sentToServer(clientSocket, packetBuff, packetLen))
-	{
-		reconnectErrorPrint("sendToServer");
-		return false;
-	}
-
-	char* msgBuff;
-	int* msgBuffLen;
-
-	if (!receiveFromServer(clientSocket, msgBuff, msgBuffLen))
-	{
-		reconnectErrorPrint("sendToServer");
-		return false;
-	}
-
-	if (to_int(msgBuff) == 0)
-	{
-		cout << "Failed to login..." << endl;
-		cin.getline(new char[1], 1);
-		return false;
-	}
-
-	return true;
-}
-#pragma endregion
 
 
 #pragma region Initialization
@@ -152,6 +90,13 @@ void initializeSocket(SOCKET* clientSocket)
 
 
 #pragma region Send&Receive
+void reconnectErrorPrint(string errorFunctionName)
+{
+	cerr << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
+	cerr << "Reconnecting..." << endl;
+	Sleep(RECONNECT_WAIT_MS);
+}
+
 bool sentToServer(SOCKET clientSocket, const char* buff, int buffLen)
 {
 	int hasSent = 0, nowSend = 0;
@@ -168,10 +113,10 @@ bool sentToServer(SOCKET clientSocket, const char* buff, int buffLen)
 	return true;
 }
 
-bool receiveFromServer(SOCKET clientSocket, char* msgBuff, int* msgBuffLen)
+bool receiveFromServer(SOCKET clientSocket, char** msgBuff, int* msgBuffLen)
 {
-	int hasReceived = 0, targetlen = 0;
-	char* buff = new char[4];
+	int hasReceived = 0;
+	char* buff = new char[2];
 
 	hasReceived = recv(clientSocket, buff, 1, 0);
 	if (hasReceived == SOCKET_ERROR)
@@ -180,7 +125,7 @@ bool receiveFromServer(SOCKET clientSocket, char* msgBuff, int* msgBuffLen)
 		return false;
 	}
 	
-	packetId id = (packetId)to_int(buff);
+	receivePacketId id = (receivePacketId)to_int(buff, 1);
 
 	hasReceived = recv(clientSocket, buff, 2, 0);
 	if (hasReceived == SOCKET_ERROR)
@@ -189,26 +134,26 @@ bool receiveFromServer(SOCKET clientSocket, char* msgBuff, int* msgBuffLen)
 		return false;
 	}
 
-	*msgBuffLen = to_int(buff);
-
+	*msgBuffLen = to_int(buff, 2);
 	
 	int nowReceive = 0;
 	hasReceived = 0;
-	msgBuff = new char[*msgBuffLen] {0};
+	*msgBuff = new char[*msgBuffLen] { 0 };
 	do
 	{
-		nowReceive = recv(clientSocket, msgBuff + hasReceived, *msgBuffLen - hasReceived, 0);
+		nowReceive = recv(clientSocket, *msgBuff + hasReceived, *msgBuffLen - hasReceived, 0);
 		if (nowReceive == SOCKET_ERROR)
 		{
 			reconnectErrorPrint("recv");
 			return false;
 		}
 		hasReceived += nowReceive;
-	} while (hasReceived != *msgBuffLen);
+	} while (hasReceived < *msgBuffLen);
 
 	return true;
 }
 #pragma endregion
+
 
 
 #pragma region DataToPacket
@@ -217,7 +162,7 @@ int toLoginPacket(const char* account, const char* password, char* outputPacket)
 	//packet_id + accountSize + account + passwordSize + password + \0
 	if (outputPacket)
 	{
-		outputPacket[0] = to_char(packetId::login);
+		outputPacket[0] = to_char(sendPacketId::sendLoginData);
 		outputPacket[1] = to_char(strlen(account) / 10);
 		outputPacket[2] = to_char(strlen(account) % 10);
 		strcat_s(outputPacket, 106, account);
@@ -233,6 +178,66 @@ int toLoginPacket(const char* account, const char* password, char* outputPacket)
 }
 #pragma endregion
 
+void exitProgram()
+{
+	exit(0);
+}
+
+
+#pragma region StatusFunction
+
+bool connectToServer(SOCKET clientSocket, sockaddr_in serverAddr)
+{
+	int returnValue = connect(clientSocket, (const sockaddr*)&serverAddr, sizeof(serverAddr));
+	if (returnValue == SOCKET_ERROR)
+	{
+		reconnectErrorPrint("connect");
+		return false;
+	}
+
+	return true;
+}
+
+bool loginToServer(SOCKET clientSocket)
+{
+	char* packetBuff = new char[LOGIN_PACKET_SIZE] { 0 }, //packet_id + account + accountSize + password + passwordSize + endingChar
+		* account = new char[ACCOUNT_SIZE] { 0 },
+		* password = new char[PASSWORD_SIZE] { 0 };
+
+	cout << "Account: ";
+	cin.getline(account, ACCOUNT_SIZE);
+	cout << "Password: ";
+	cin.getline(password, PASSWORD_SIZE);
+
+	int packetLen = toLoginPacket(account, password, packetBuff);
+
+	if (!sentToServer(clientSocket, packetBuff, packetLen))
+	{
+		reconnectErrorPrint("sendToServer");
+		return false;
+	}
+
+	char* msgBuff = new char[BUFF_SIZE] { 0 };
+	int* msgBuffLen = new int(BUFF_SIZE);
+
+	if (!receiveFromServer(clientSocket, &msgBuff, msgBuffLen))
+	{
+		reconnectErrorPrint("sendToServer");
+		return false;
+	}
+	
+	if (to_int(msgBuff, *msgBuffLen) == 0)
+	{
+		cout << "Failed to login... Press Enter to continue..." << endl;
+		cin.get();
+		return false;
+	}
+
+	return true;
+}
+#pragma endregion
+
+
 
 void test()
 {
@@ -244,7 +249,7 @@ void test()
 
 int main()
 {
-	test();
+	//test();
 
 	WSADATA wsaData;
 	SOCKET clientSocket;
@@ -264,19 +269,19 @@ int main()
 		switch (clientStatus)
 		{
 		case status::connecting:
-			if (connectToServer(clientSocket, (const sockaddr*)&serverAddr))
+			if (connectToServer(clientSocket, serverAddr))
 				clientStatus = status::login;
 
 			break;
 
 		case status::login:
-			if (login(clientSocket))
+			if (loginToServer(clientSocket))
 				clientStatus = status::chatRoomList;
 
 			break;
 
 		case status::chatRoomList:
-
+			
 			break;
 
 		case status::chatRoom:
