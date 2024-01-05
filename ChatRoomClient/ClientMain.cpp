@@ -200,7 +200,7 @@ bool connectToServer(SOCKET clientSocket, sockaddr_in serverAddr)
 
 bool loginToServer(SOCKET clientSocket)
 {
-	char* packetBuff = new char[LOGIN_PACKET_SIZE] { 0 }, //packet_id + account + accountSize + password + passwordSize + endingChar
+	char* packetBuff = new char[LOGIN_PACKET_SIZE] { 0 }, //packet_id + accountSize + account + passwordSize + password + endingChar
 		* account = new char[ACCOUNT_SIZE] { 0 },
 		* password = new char[PASSWORD_SIZE] { 0 };
 
