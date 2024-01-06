@@ -5,6 +5,8 @@
 
 using namespace std;
 
+#include "TypeConversion.h"
+#include "Packet.h"
 
 
 #define SERVER_IP "127.0.0.1"
@@ -22,20 +24,6 @@ using namespace std;
 
 
 
-enum sendPacketId
-	{
-		checkStatus,
-		sendLoginData,
-		getChatRoomList,
-		sendChatRoomMessage
-	};
-enum receivePacketId
-{
-	returnStatus,
-	successOrFailure,
-	ChatRoomList,
-	ChatRoomMessage
-};
 enum status
 {
 	connecting,
@@ -46,78 +34,10 @@ enum status
 
 
 
-#pragma region TypeConversion
-char to_char(int n)
+void exitProgram()
 {
-	return '0' + n;
+	exit(0);
 }
-
-int to_int(const char* c, int cLen)
-{
-	int int_c = 0;
-
-	for (int i = 0; i < cLen; i++)
-	{
-		int_c *= 10;
-		int_c += c[i] - '0';
-	}
-
-	return int_c;
-}
-#pragma endregion
-
-
-
-class Packet
-{
-public:
-	int msgLen;
-	char* msgBuff;
-
-protected:
-	Packet() {}	
-};
-
-class SendLoginDataPacket : public Packet
-{
-public:
-	SendLoginDataPacket(const char* account, const char* password)
-	{
-		msgBuff = new char[LOGIN_PACKET_SIZE] { 0 };
-
-		//packet_id + accountSize + account + passwordSize + password + \0
-		msgBuff[0] = to_char(sendPacketId::sendLoginData);
-
-		msgBuff[1] = to_char(strlen(account) / 10);
-		msgBuff[2] = to_char(strlen(account) % 10);
-
-		strcat_s(msgBuff, 106, account);
-
-		msgBuff[strlen(account) + 3] = to_char(strlen(password) / 10);
-		msgBuff[strlen(account) + 4] = to_char(strlen(password) % 10);
-		msgBuff[strlen(account) + 5] = '\0';
-
-		strcat_s(msgBuff, 106, password);
-
-		msgBuff[strlen(account) + strlen(password) + 6] = '\0';
-
-		msgLen = strlen(msgBuff);
-	}
-};
-
-class GetChatRoomListPacket : public Packet
-{
-public:
-	GetChatRoomListPacket()
-	{
-		msgBuff = new char[GET_CHAT_ROOM_LIST_PACKET_SIZE] { 0 };
-
-		msgBuff[0] = to_char(sendPacketId::getChatRoomList);
-		msgBuff[1] = '\0';
-
-		msgLen = strlen(msgBuff);
-	}
-};
 
 
 
@@ -154,7 +74,7 @@ void reconnectErrorPrint(string errorFunctionName)
 	Sleep(RECONNECT_WAIT_MS);
 }
 
-bool sentToServer(SOCKET clientSocket, Packet packet)
+bool sentToServer(SOCKET clientSocket, SendPacket packet)
 {
 	int hasSent = 0, nowSend = 0;
 	do
@@ -170,7 +90,7 @@ bool sentToServer(SOCKET clientSocket, Packet packet)
 	return true;
 }
 
-bool receiveFromServer(SOCKET clientSocket, char** msgBuff, int* msgBuffLen)
+bool receiveFromServer(SOCKET clientSocket, ReceivePacket* packet)
 {
 	int hasReceived = 0;
 	char* buff = new char[2];
@@ -182,7 +102,7 @@ bool receiveFromServer(SOCKET clientSocket, char** msgBuff, int* msgBuffLen)
 		return false;
 	}
 	
-	receivePacketId id = (receivePacketId)to_int(buff, 1);
+	packet->id = (receivePacketId)to_int(buff, 1);
 
 	hasReceived = recv(clientSocket, buff, 2, 0);
 	if (hasReceived == SOCKET_ERROR)
@@ -191,31 +111,26 @@ bool receiveFromServer(SOCKET clientSocket, char** msgBuff, int* msgBuffLen)
 		return false;
 	}
 
-	*msgBuffLen = to_int(buff, 2);
+	packet->msgLen = to_int(buff, 2);
 	
 	int nowReceive = 0;
 	hasReceived = 0;
-	*msgBuff = new char[*msgBuffLen] { 0 };
+	packet->msgBuff = new char[packet->msgLen] { 0 };
 	do
 	{
-		nowReceive = recv(clientSocket, *msgBuff + hasReceived, *msgBuffLen - hasReceived, 0);
+		nowReceive = recv(clientSocket, packet->msgBuff + hasReceived, packet->msgLen - hasReceived, 0);
 		if (nowReceive == SOCKET_ERROR)
 		{
 			reconnectErrorPrint("recv");
 			return false;
 		}
 		hasReceived += nowReceive;
-	} while (hasReceived < *msgBuffLen);
+	} while (hasReceived < packet->msgLen);
 
 	return true;
 }
 #pragma endregion
 
-
-void exitProgram()
-{
-	exit(0);
-}
 
 
 #pragma region StatusFunction
@@ -242,7 +157,7 @@ bool loginToServer(SOCKET clientSocket)
 	cout << "Password: ";
 	cin.getline(password, PASSWORD_SIZE);
 
-	Packet sendLoginDataPacket = SendLoginDataPacket(account, password);
+	SendPacket sendLoginDataPacket = SendLoginDataPacket(account, password);
 
 	if (!sentToServer(clientSocket, sendLoginDataPacket))
 	{
@@ -250,16 +165,15 @@ bool loginToServer(SOCKET clientSocket)
 		return false;
 	}
 
-	char* msgBuff = new char[BUFF_SIZE] { 0 };
-	int* msgBuffLen = new int(BUFF_SIZE);
+	ReceivePacket receiveLoginRespondPacket = ReceivePacket();
 
-	if (!receiveFromServer(clientSocket, &msgBuff, msgBuffLen))
+	if (!receiveFromServer(clientSocket, &receiveLoginRespondPacket))
 	{
 		reconnectErrorPrint("sendToServer");
 		return false;
 	}
 	
-	if (to_int(msgBuff, *msgBuffLen) == 0)
+	if (to_int(receiveLoginRespondPacket.msgBuff, receiveLoginRespondPacket.msgLen) == 0)
 	{
 		cout << "Failed to login... Press Enter to continue..." << endl;
 		cin.get();
@@ -271,7 +185,7 @@ bool loginToServer(SOCKET clientSocket)
 
 bool getChatRoomListFromServer(SOCKET clientSocket)
 {
-	Packet getChatRoomListPacket = GetChatRoomListPacket();
+	SendPacket getChatRoomListPacket = GetChatRoomListPacket();
 
 	if (!sentToServer(clientSocket, getChatRoomListPacket))
 	{
@@ -279,21 +193,15 @@ bool getChatRoomListFromServer(SOCKET clientSocket)
 		return false;
 	}
 
-	char* msgBuff = new char[BUFF_SIZE] { 0 };
-	int* msgBuffLen = new int(BUFF_SIZE);
+	ReceivePacket receiveChatRoomListSizePacket = ReceivePacket();
 
-	if (!receiveFromServer(clientSocket, &msgBuff, msgBuffLen))
+	if (!receiveFromServer(clientSocket, &receiveChatRoomListSizePacket))
 	{
 		reconnectErrorPrint("sendToServer");
 		return false;
 	}
 
-	if (to_int(msgBuff, *msgBuffLen) == 0)
-	{
-		cout << "Failed to login... Press Enter to continue...";
-		cin.get();
-		return false;
-	}
+	//for (int i = )
 }
 
 bool selectChatRoom(SOCKET clientSocket)

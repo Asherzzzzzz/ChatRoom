@@ -18,5 +18,19 @@
     <ClCompile Include="ClientMain.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
+    <ClCompile Include="Packet.cpp">
+      <Filter>資源檔</Filter>
+    </ClCompile>
+    <ClCompile Include="TypeConversion.cpp">
+      <Filter>資源檔</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Packet.h">
+      <Filter>標頭檔</Filter>
+    </ClInclude>
+    <ClInclude Include="TypeConversion.h">
+      <Filter>標頭檔</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
