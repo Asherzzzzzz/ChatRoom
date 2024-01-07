@@ -3,7 +3,11 @@
 
 #include <string>
 #include <string.h>
+#include <vector>
+
 #include "ChatRoom.h"
+
+using namespace std;
 
 
 #pragma region ClientPacket
@@ -15,24 +19,25 @@ public:
 	int msgLen;
 
 	ClientPacket();
-	virtual void setData(clientPacketId, char*, int);
+	virtual int getTotalSizeLength();
+	virtual void setData(char*, int);
 };
 
 class SendLoginDataPacket : public ClientPacket
 {
 public:
-	std::string account, password;
+	string account, password;
 
 	SendLoginDataPacket();
-	SendLoginDataPacket(const char*, const char*);
-	virtual void setData(clientPacketId, char*, int);
+	SendLoginDataPacket(string, string);
+	void setData(char*, int);
 };
 
 class GetChatRoomListPacket : public ClientPacket
 {
 public:
 	GetChatRoomListPacket();
-	virtual void setData(clientPacketId, char*, int);
+	//void setData(char*, int);
 };
 #pragma endregion
 
@@ -46,7 +51,8 @@ public:
 	int msgLen;
 
 	ServerPacket();
-	virtual void setData(serverPacketId, char*, int);
+	virtual int getTotalSizeLength();
+	virtual void setData(char*, int);
 };
 
 class SuccessOrFailurePacket : public ServerPacket
@@ -55,17 +61,19 @@ public:
 	bool successOrFailureValue;
 
 	SuccessOrFailurePacket();
-	virtual void setData(serverPacketId, char*, int);
+	SuccessOrFailurePacket(bool);
+	void setData(char*, int);
 };
 
 class ChatRoomListPacket : public ServerPacket
 {
 public:
-	ChatRoom* chatRoomList;
-	int chatRoomListSize;
+	vector<ChatRoom> chatRoomList;
 
 	ChatRoomListPacket();
-	virtual void setData(serverPacketId, char*, int);
+	ChatRoomListPacket(vector<ChatRoom>);
+	int getTotalSizeLength();
+	void setData(char*, int);
 };
 #pragma endregion
 

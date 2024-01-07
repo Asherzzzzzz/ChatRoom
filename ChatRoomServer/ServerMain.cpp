@@ -41,21 +41,22 @@ public:
 		password = "";
 		status = clientStatus::loggingIn;
 	}
-	Client(SOCKET socket, char* ip, string account, string password, clientStatus status)
+	//Client(SOCKET socket, char* ip, string account, string password, clientStatus status)
+	//{
+	//	this->socket = socket;
+	//	this->ip = ip;
+	//	this->account = account;
+	//	this->password = password;
+	//	this->status = status;
+	//}
+
+	void setAccountAndPassword(string account, string password)
 	{
-		this->socket = socket;
-		this->ip = ip;
 		this->account = account;
 		this->password = password;
-		this->status = status;
-	}
-	~Client()
-	{
-		closesocket(socket);
-		delete ip;
 	}
 };
-bool equal(Client c1, Client c2)
+bool equal(Client& c1, Client& c2)
 {
 	return c1.socket == c2.socket;
 }
@@ -67,6 +68,7 @@ public:
 	SOCKET socket;
 	vector<Client> clientList;
 	vector<thread> clientThreadList;
+	vector<ChatRoom> chatRoomList;
 
 private:
 	map<string, string> accountAndPassword;
@@ -77,7 +79,7 @@ private:
 		socket = INVALID_SOCKET;
 		clientList = vector<Client>();
 		clientThreadList = vector<thread>();
-
+		chatRoomList = vector<ChatRoom>();
 		accountAndPassword = map<string, string>();
 	}
 
@@ -87,23 +89,33 @@ public:
 		return instance;
 	}
 
-	void updateAccountAndPassword()
-	{
-
-	}
-
 	bool checkAccountExist(string account)
 	{
 		return accountAndPassword.find(account) != accountAndPassword.end();
 	}
+	bool addNewAccount(string account, string password)
+	{
+		if (checkAccountExist(account))
+			return false;
 
+		accountAndPassword[account] = password;
+	}
 	bool checkAccountAndPassword(string account, string password)
 	{
 		return checkAccountExist(account) && accountAndPassword[account] == password;
 	}
 
+	bool addNewChatRoom(string chatRoomName)
+	{
+		chatRoomList.emplace_back(7, chatRoomName);
+		return true;
+	}
+
 	void closeClient(Client* client)
 	{
+		if (client->status == clientStatus::nullStatus)
+			return;
+
 		for (int i = 0; i < clientList.size(); i++)
 		{
 			if (equal(clientList[i], *client))
@@ -114,8 +126,8 @@ public:
 				break;
 			}
 		}
-
-		client->~Client();
+		client->status = clientStatus::nullStatus;
+		closesocket(client->socket);
 	}
 };
 Server Server::instance = Server();
@@ -133,6 +145,9 @@ void restartServerErrorPrint(string errorFunctionName)
 }
 void reconnectClientErrorPrint(string errorFunctionName, Client* client)
 {
+	if (client->status == clientStatus::nullStatus)
+		return;
+
 	cerr << "When processing " << client->account << "-" << client->ip << ", " << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
 	serverInstance.closeClient(client);
 }
@@ -157,26 +172,31 @@ bool sendToClient(Client* client, ServerPacket packet)
 	return true;
 }
 
-bool receiveFromClient(SOCKET clientSocket, ClientPacket* packet)
+bool receivePacketIdFromClient(Client* client, clientPacketId* packetId)
 {
-	// id section
-	int hasReceived = 0;
-	char* buff = new char[2] { 0 };
+	char* buff = new char[1] { 0 };
 
-	hasReceived = recv(clientSocket, buff, 1, 0);
+	int hasReceived = recv(client->socket, buff, 1, 0);
 	if (hasReceived == SOCKET_ERROR)
 	{
-		restartServerErrorPrint("recv");
+		reconnectClientErrorPrint("recv", client);
 		return false;
 	}
 
-	clientPacketId id = (clientPacketId)to_int(buff, 1);
+	*packetId = (clientPacketId)to_int(buff, 1);
+
+	return true;
+}
+
+bool receiveMsgFromClient(Client* client, ClientPacket* packet)
+{
+	char* buff = new char[2] { 0 };
 
 	// total length section
-	hasReceived = recv(clientSocket, buff, 2, 0);
+	int hasReceived = recv(client->socket, buff, 2, 0);
 	if (hasReceived == SOCKET_ERROR)
 	{
-		restartServerErrorPrint("recv");
+		reconnectClientErrorPrint("recv", client);
 		return false;
 	}
 
@@ -188,16 +208,16 @@ bool receiveFromClient(SOCKET clientSocket, ClientPacket* packet)
 	char* msgBuff = new char[msgLen] { 0 };
 	do
 	{
-		nowReceive = recv(clientSocket, msgBuff + hasReceived, msgLen - hasReceived, 0);
+		nowReceive = recv(client->socket, msgBuff + hasReceived, msgLen - hasReceived, 0);
 		if (nowReceive == SOCKET_ERROR)
 		{
-			restartServerErrorPrint("recv");
+			reconnectClientErrorPrint("recv", client);
 			return false;
 		}
 		hasReceived += nowReceive;
 	} while (hasReceived < msgLen);
 
-	packet->setData(id, msgBuff, msgLen);
+	packet->setData(msgBuff, msgLen);
 
 	return true;
 }
@@ -274,45 +294,95 @@ bool listenSocket()
 #pragma endregion
 
 
-bool login(Client* client)
+bool clientLogin(Client* client, bool* loginSuccessOrFailure)
 {
-	
 	SendLoginDataPacket loginDataPacket;
-	if (!receiveFromClient(client->socket, &loginDataPacket))
+	if (!receiveMsgFromClient(client, &loginDataPacket))
 	{
-		restartServerErrorPrint("receiveFromServer");
+		reconnectClientErrorPrint("receiveMsgFromClient", client);
 		return false;
 	}
 
-	if (!serverInstance.checkAccountAndPassword(client->account, client->password))
+	*loginSuccessOrFailure = serverInstance.checkAccountAndPassword(loginDataPacket.account, loginDataPacket.password);
+
+
+	if (!*loginSuccessOrFailure)
 	{
 		cout << client->ip << " failed to log in" << endl;
+	}
+	else
+	{
+		client->setAccountAndPassword(loginDataPacket.account, loginDataPacket.password);
+		cout << client->account << "-" << client->ip << " successfully logged in" << endl;
+	}
+
+	SuccessOrFailurePacket successOrFailurePacket(*loginSuccessOrFailure);
+	if (!sendToClient(client, successOrFailurePacket))
+	{
+		reconnectClientErrorPrint("sendToClient", client);
 		return false;
 	}
 
-	cout << client->account << "-" << client->ip << " successfully logged in" << endl;
+	return true;
+}
+
+bool clientGetChatRoomList(Client* client)
+{
+	ChatRoomListPacket chatRoomListPacket(serverInstance.chatRoomList);
+	if (!sendToClient(client, chatRoomListPacket))
+	{
+		reconnectClientErrorPrint("sendToClient", client);
+		return false;
+	}
+
+	return true;
+}
+
+bool clientJoinChatRoom(Client* client)
+{
+
 	return true;
 }
 
 
 void clientProcess(Client* client)
 {
+	clientPacketId packetId;
+
 	while (true)
 	{
-		switch (client->status)
+		if (client->status == clientStatus::nullStatus)
+			return;
+
+		if (!receivePacketIdFromClient(client, &packetId))
 		{
-		case clientStatus::loggingIn:
-			if (login(client))
+			reconnectClientErrorPrint("receivePacketIdFromClient", client);
+			return;
+		}
+
+		switch (packetId)
+		{
+		case clientPacketId::sendLoginData:
+			bool loginSuccessOrFailure;
+			if (!clientLogin(client, &loginSuccessOrFailure))
+				return;
+			if (loginSuccessOrFailure)
 				client->status = clientStatus::chatRoomList;
 			break;
 
-		case clientStatus::chatRoomList:
-			//if (selectChatRoom(clientSocket))
-				client->status = clientStatus::chatRoom;
+		case clientPacketId::getChatRoomList:
+			if (!clientGetChatRoomList(client))
+				return;
 			break;
 
-		case clientStatus::chatRoom:
+		case clientPacketId::selectChatRoom:
+			if (!clientJoinChatRoom(client))
+				return;
+			break;
 
+		case clientPacketId::sendChatRoomMessage:
+
+				client->status = clientStatus::chatRoom;
 			break;
 		}
 	}
@@ -322,8 +392,15 @@ void clientProcess(Client* client)
 
 int main()
 {
-	WSADATA wsaData;
-	
+	//test
+	serverInstance.addNewAccount("aa", "123");
+	serverInstance.addNewAccount("2", "123");
+	serverInstance.addNewChatRoom("newaa");
+	serverInstance.addNewChatRoom("eeeeeeee");
+	//test
+
+
+	WSADATA wsaData;	
 
 	while (true)
 	{
@@ -357,7 +434,7 @@ int main()
 
 			cout << "Accept client socket : " << clientSocket << endl;
 
-			char client_ip[INET_ADDRSTRLEN];
+			char client_ip[INET_ADDRSTRLEN] { 0 };
 			inet_ntop(AF_INET, &clientAddr, client_ip, INET_ADDRSTRLEN);
 
 			serverInstance.clientList.emplace_back(clientSocket, client_ip);

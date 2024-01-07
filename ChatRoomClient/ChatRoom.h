@@ -3,6 +3,10 @@
 
 #include <string>
 
+using namespace std;
+
+
+
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 9909
 
@@ -10,6 +14,8 @@
 
 #define BUFF_SIZE 1024
 
+#define NORMAL_TOTAL_SIZE_LENGTH 2
+#define GET_CHAT_ROOM_LIST_TOTAL_SIZE_LENGTH 4
 #define ACCOUNT_SIZE 20
 #define PASSWORD_SIZE 20
 
@@ -19,6 +25,7 @@ enum clientPacketId
 {
 	sendLoginData,
 	getChatRoomList,
+	selectChatRoom,
 	sendChatRoomMessage
 };
 enum serverPacketId
@@ -30,6 +37,7 @@ enum serverPacketId
 
 enum clientStatus
 {
+	nullStatus,
 	initializing,
 	connecting,
 	loggingIn,
@@ -38,10 +46,14 @@ enum clientStatus
 };
 
 
-struct ChatRoom
+class ChatRoom
 {
-	int id = -1;
-	std::string name = "";
+public:
+	int id;
+	string name;
+
+	ChatRoom();
+	ChatRoom(int, string);
 };
 
 

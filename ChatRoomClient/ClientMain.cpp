@@ -96,7 +96,7 @@ bool receiveFromServer(SOCKET clientSocket, ServerPacket* packet)
 {
 	// id section
 	int hasReceived = 0;
-	char* buff = new char[2];
+	char* buff = new char[packet->getTotalSizeLength()];
 
 	hasReceived = recv(clientSocket, buff, 1, 0);
 	if (hasReceived == SOCKET_ERROR)
@@ -108,14 +108,14 @@ bool receiveFromServer(SOCKET clientSocket, ServerPacket* packet)
 	serverPacketId id = (serverPacketId)to_int(buff, 1);
 
 	// total length section
-	hasReceived = recv(clientSocket, buff, 2, 0);
+	hasReceived = recv(clientSocket, buff, packet->getTotalSizeLength(), 0);
 	if (hasReceived == SOCKET_ERROR)
 	{
 		restartErrorPrint("recv");
 		return false;
 	}
 
-	int msgLen = to_int(buff, 2);
+	int msgLen = to_int(buff, packet->getTotalSizeLength());
 
 	// msg section
 	int nowReceive = 0;
@@ -132,7 +132,7 @@ bool receiveFromServer(SOCKET clientSocket, ServerPacket* packet)
 		hasReceived += nowReceive;
 	} while (hasReceived < msgLen);
 
-	packet->setData(id, msgBuff, msgLen);
+	packet->setData(msgBuff, msgLen);
 
 	return true;
 }
@@ -194,7 +194,7 @@ bool loginToServer(SOCKET clientSocket)
 	return true;
 }
 
-bool getChatRoomListFromServer(SOCKET clientSocket, ChatRoom** chatRoomList, int* chatRoomListSize)
+bool getChatRoomListFromServer(SOCKET clientSocket, vector<ChatRoom>* chatRoomList)
 {
 	GetChatRoomListPacket getChatRoomListPacket;
 
@@ -212,20 +212,21 @@ bool getChatRoomListFromServer(SOCKET clientSocket, ChatRoom** chatRoomList, int
 		return false;
 	}
 
-	*chatRoomListSize = receiveChatRoomListPacket.chatRoomListSize;
 	*chatRoomList = receiveChatRoomListPacket.chatRoomList;
 }
 
-bool selectChatRoom(SOCKET clientSocket)
+bool joinChatRoom(SOCKET clientSocket)
 {
-	ChatRoom* chatRoomList;
-	int chatRoomListSize = 0;
-	if (getChatRoomListFromServer(clientSocket, &chatRoomList, &chatRoomListSize))
+	vector<ChatRoom> chatRoomList;
+
+	if (!getChatRoomListFromServer(clientSocket, &chatRoomList))
 	{
-		for (int i = 0; i < chatRoomListSize; i++)
-		{
-			printf("%d %s\n", chatRoomList[i].id, chatRoomList[i].name.c_str());
-		}
+		return false;
+	}
+	
+	for (int i = 0; i < chatRoomList.size(); i++)
+	{
+		printf("%d %s\n", chatRoomList[i].id, chatRoomList[i].name.c_str());
 	}
 
 	return true;
@@ -268,7 +269,7 @@ int main()
 			break;
 
 		case clientStatus::chatRoomList:
-			if (selectChatRoom(clientSocket))
+			if (joinChatRoom(clientSocket))
 				status = clientStatus::chatRoom;
 			break;
 

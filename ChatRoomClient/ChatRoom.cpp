@@ -20,3 +20,14 @@ int to_int(const char* c, int cLen)
 	return int_c;
 }
 #pragma endregion
+
+ChatRoom::ChatRoom()
+{
+	id = -1;
+	name = "";
+}
+ChatRoom::ChatRoom(int id, string name)
+{
+	this->id = id;
+	this->name = name;
+}
