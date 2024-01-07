@@ -1,5 +1,7 @@
-#include "TypeConversion.h"
+#include "ChatRoom.h"
 
+
+#pragma region TypeConversion
 char to_char(int n)
 {
 	return '0' + n;
@@ -17,3 +19,4 @@ int to_int(const char* c, int cLen)
 
 	return int_c;
 }
+#pragma endregion

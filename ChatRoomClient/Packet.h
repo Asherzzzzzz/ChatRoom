@@ -1,63 +1,72 @@
-#pragma once
+#ifndef PACKET_HEADER
+#define PACKET_HEADER
 
-#define BUFF_SIZE 1024
-
-#define ACCOUNT_SIZE 50
-#define PASSWORD_SIZE 50
-#define LOGIN_PACKET_SIZE 6 + ACCOUNT_SIZE + PASSWORD_SIZE
-
-#define GET_CHAT_ROOM_LIST_PACKET_SIZE 2
+#include <string>
+#include <string.h>
+#include "ChatRoom.h"
 
 
-enum sendPacketId
-{
-	checkStatus,
-	sendLoginData,
-	getChatRoomList,
-	sendChatRoomMessage
-};
-enum receivePacketId
-{
-	successOrFailure,
-	returnStatus,
-	ChatRoomList,
-	ChatRoomMessage
-};
-
-
-#pragma region SendPacket
-class SendPacket
+#pragma region ClientPacket
+class ClientPacket
 {
 public:
+	clientPacketId id;
 	char* msgBuff;
 	int msgLen;
 
-protected:
-	SendPacket();
+	ClientPacket();
+	virtual void setData(clientPacketId, char*, int);
 };
 
-class SendLoginDataPacket : public SendPacket
+class SendLoginDataPacket : public ClientPacket
 {
 public:
+	std::string account, password;
+
+	SendLoginDataPacket();
 	SendLoginDataPacket(const char*, const char*);
+	virtual void setData(clientPacketId, char*, int);
 };
 
-class GetChatRoomListPacket : public SendPacket
+class GetChatRoomListPacket : public ClientPacket
 {
 public:
 	GetChatRoomListPacket();
+	virtual void setData(clientPacketId, char*, int);
 };
 #pragma endregion
 
 
-#pragma region ReceivePacket
-class ReceivePacket
+#pragma region ServerPacket
+class ServerPacket
 {
 public:
-	receivePacketId id;
+	serverPacketId id;
 	char* msgBuff;
 	int msgLen;
 
-	ReceivePacket();
+	ServerPacket();
+	virtual void setData(serverPacketId, char*, int);
+};
+
+class SuccessOrFailurePacket : public ServerPacket
+{
+public:
+	bool successOrFailureValue;
+
+	SuccessOrFailurePacket();
+	virtual void setData(serverPacketId, char*, int);
+};
+
+class ChatRoomListPacket : public ServerPacket
+{
+public:
+	ChatRoom* chatRoomList;
+	int chatRoomListSize;
+
+	ChatRoomListPacket();
+	virtual void setData(serverPacketId, char*, int);
 };
 #pragma endregion
+
+#endif

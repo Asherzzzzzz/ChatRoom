@@ -128,13 +128,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ChatRoom.cpp" />
     <ClCompile Include="ClientMain.cpp" />
     <ClCompile Include="Packet.cpp" />
-    <ClCompile Include="TypeConversion.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ChatRoom.h" />
     <ClInclude Include="Packet.h" />
-    <ClInclude Include="TypeConversion.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

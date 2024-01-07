@@ -5,33 +5,14 @@
 
 using namespace std;
 
-#include "TypeConversion.h"
+#include "ChatRoom.h"
 #include "Packet.h"
 
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 9909
 
-#define RECONNECT_WAIT_MS 5000
+SOCKET clientSocket;
 
-#define BUFF_SIZE 1024
-
-#define ACCOUNT_SIZE 50
-#define PASSWORD_SIZE 50
-#define LOGIN_PACKET_SIZE 6 + ACCOUNT_SIZE + PASSWORD_SIZE
-
-#define GET_CHAT_ROOM_LIST_PACKET_SIZE 2
-
-
-
-enum status
-{
-	connecting,
-	login,
-	chatRoomList,
-	chatRoom
-};
-
+clientStatus status = clientStatus::initializing;
 
 
 void exitProgram()
@@ -42,39 +23,60 @@ void exitProgram()
 
 
 #pragma region Initialization
-void initializeWSA(WSADATA* wsaData)
+bool initializeWSA(WSADATA* wsaData)
 {
 	int error = WSAStartup(MAKEWORD(2, 2), wsaData);
 	if (error != 0)
 	{
 		cerr << "WSAStartup() failed with error: " << error << endl;
-		exit(EXIT_FAILURE);
+		return false;
 	}
+
+	return true;
 }
 
-void initializeSocket(SOCKET* clientSocket)
+bool initializeSocket()
 {
-	*clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (*clientSocket == INVALID_SOCKET)
+	clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (clientSocket == INVALID_SOCKET)
 	{
 		cerr << endl << "socket() failed with error: " << WSAGetLastError() << endl;
 		WSACleanup();
-		exit(EXIT_FAILURE);
+		return false;
 	}
+
+	return true;
+}
+#pragma endregion
+
+
+
+#pragma region ErrorPrint
+void restartErrorPrint(string errorFunctionName)
+{
+	status = clientStatus::initializing;
+
+	cerr << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
+	cerr << "Restarting..." << endl;
+	WSACleanup();
+	closesocket(clientSocket);
+	Sleep(RESTART_WAIT_MS);
+}
+
+void reconnectErrorPrint(string errorFunctionName)
+{
+	status = clientStatus::connecting;
+
+	cerr << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
+	cerr << "Reconnecting..." << endl;
+	Sleep(RESTART_WAIT_MS);
 }
 #pragma endregion
 
 
 
 #pragma region Send&Receive
-void reconnectErrorPrint(string errorFunctionName)
-{
-	cerr << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
-	cerr << "Reconnecting..." << endl;
-	Sleep(RECONNECT_WAIT_MS);
-}
-
-bool sentToServer(SOCKET clientSocket, SendPacket packet)
+bool sendToServer(SOCKET clientSocket, ClientPacket packet)
 {
 	int hasSent = 0, nowSend = 0;
 	do
@@ -90,42 +92,47 @@ bool sentToServer(SOCKET clientSocket, SendPacket packet)
 	return true;
 }
 
-bool receiveFromServer(SOCKET clientSocket, ReceivePacket* packet)
+bool receiveFromServer(SOCKET clientSocket, ServerPacket* packet)
 {
+	// id section
 	int hasReceived = 0;
 	char* buff = new char[2];
 
 	hasReceived = recv(clientSocket, buff, 1, 0);
 	if (hasReceived == SOCKET_ERROR)
 	{
-		reconnectErrorPrint("recv");
+		restartErrorPrint("recv");
 		return false;
 	}
 	
-	packet->id = (receivePacketId)to_int(buff, 1);
+	serverPacketId id = (serverPacketId)to_int(buff, 1);
 
+	// total length section
 	hasReceived = recv(clientSocket, buff, 2, 0);
 	if (hasReceived == SOCKET_ERROR)
 	{
-		reconnectErrorPrint("recv");
+		restartErrorPrint("recv");
 		return false;
 	}
 
-	packet->msgLen = to_int(buff, 2);
-	
+	int msgLen = to_int(buff, 2);
+
+	// msg section
 	int nowReceive = 0;
 	hasReceived = 0;
-	packet->msgBuff = new char[packet->msgLen] { 0 };
+	char* msgBuff = new char[msgLen] { 0 };
 	do
 	{
-		nowReceive = recv(clientSocket, packet->msgBuff + hasReceived, packet->msgLen - hasReceived, 0);
+		nowReceive = recv(clientSocket, msgBuff + hasReceived, msgLen - hasReceived, 0);
 		if (nowReceive == SOCKET_ERROR)
 		{
-			reconnectErrorPrint("recv");
+			restartErrorPrint("recv");
 			return false;
 		}
 		hasReceived += nowReceive;
-	} while (hasReceived < packet->msgLen);
+	} while (hasReceived < msgLen);
+
+	packet->setData(id, msgBuff, msgLen);
 
 	return true;
 }
@@ -135,8 +142,12 @@ bool receiveFromServer(SOCKET clientSocket, ReceivePacket* packet)
 
 #pragma region StatusFunction
 
-bool connectToServer(SOCKET clientSocket, sockaddr_in serverAddr)
+bool connectToServer(SOCKET clientSocket)
 {
+	struct sockaddr_in serverAddr { AF_INET, htons(SERVER_PORT) };
+	inet_pton(AF_INET, SERVER_IP, &serverAddr.sin_addr.s_addr);
+	memset(&serverAddr.sin_zero, 0, 8);
+
 	int returnValue = connect(clientSocket, (const sockaddr*)&serverAddr, sizeof(serverAddr));
 	if (returnValue == SOCKET_ERROR)
 	{
@@ -157,23 +168,23 @@ bool loginToServer(SOCKET clientSocket)
 	cout << "Password: ";
 	cin.getline(password, PASSWORD_SIZE);
 
-	SendPacket sendLoginDataPacket = SendLoginDataPacket(account, password);
+	SendLoginDataPacket sendLoginDataPacket(account, password);
 
-	if (!sentToServer(clientSocket, sendLoginDataPacket))
+	if (!sendToServer(clientSocket, sendLoginDataPacket))
 	{
-		reconnectErrorPrint("sendToServer");
+		restartErrorPrint("sendToServer");
 		return false;
 	}
 
-	ReceivePacket receiveLoginRespondPacket = ReceivePacket();
+	SuccessOrFailurePacket receiveLoginRespondPacket;
 
 	if (!receiveFromServer(clientSocket, &receiveLoginRespondPacket))
 	{
-		reconnectErrorPrint("sendToServer");
+		restartErrorPrint("receiveFromServer");
 		return false;
 	}
 	
-	if (to_int(receiveLoginRespondPacket.msgBuff, receiveLoginRespondPacket.msgLen) == 0)
+	if (!receiveLoginRespondPacket.successOrFailureValue)
 	{
 		cout << "Failed to login... Press Enter to continue..." << endl;
 		cin.get();
@@ -183,30 +194,39 @@ bool loginToServer(SOCKET clientSocket)
 	return true;
 }
 
-bool getChatRoomListFromServer(SOCKET clientSocket)
+bool getChatRoomListFromServer(SOCKET clientSocket, ChatRoom** chatRoomList, int* chatRoomListSize)
 {
-	SendPacket getChatRoomListPacket = GetChatRoomListPacket();
+	GetChatRoomListPacket getChatRoomListPacket;
 
-	if (!sentToServer(clientSocket, getChatRoomListPacket))
+	if (!sendToServer(clientSocket, getChatRoomListPacket))
 	{
-		reconnectErrorPrint("sendToServer");
+		restartErrorPrint("sendToServer");
 		return false;
 	}
 
-	ReceivePacket receiveChatRoomListSizePacket = ReceivePacket();
+	ChatRoomListPacket receiveChatRoomListPacket;
 
-	if (!receiveFromServer(clientSocket, &receiveChatRoomListSizePacket))
+	if (!receiveFromServer(clientSocket, &receiveChatRoomListPacket))
 	{
-		reconnectErrorPrint("sendToServer");
+		restartErrorPrint("receiveFromServer");
 		return false;
 	}
 
-	//for (int i = )
+	*chatRoomListSize = receiveChatRoomListPacket.chatRoomListSize;
+	*chatRoomList = receiveChatRoomListPacket.chatRoomList;
 }
 
 bool selectChatRoom(SOCKET clientSocket)
 {
-	getChatRoomListFromServer(clientSocket);
+	ChatRoom* chatRoomList;
+	int chatRoomListSize = 0;
+	if (getChatRoomListFromServer(clientSocket, &chatRoomList, &chatRoomListSize))
+	{
+		for (int i = 0; i < chatRoomListSize; i++)
+		{
+			printf("%d %s\n", chatRoomList[i].id, chatRoomList[i].name.c_str());
+		}
+	}
 
 	return true;
 }
@@ -227,40 +247,32 @@ int main()
 	//test();
 
 	WSADATA wsaData;
-	SOCKET clientSocket;
-	initializeWSA(&wsaData);
-	initializeSocket(&clientSocket);
-
-
-	struct sockaddr_in serverAddr { AF_INET, htons(SERVER_PORT) };
-	inet_pton(AF_INET, SERVER_IP, &serverAddr.sin_addr.s_addr);
-	memset(&serverAddr.sin_zero, 0, 8);
-
-
-	status clientStatus = status::connecting;
 
 	while (1)
 	{
-		switch (clientStatus)
+		switch (status)
 		{
-		case status::connecting:
-			if (connectToServer(clientSocket, serverAddr))
-				clientStatus = status::login;
-
+		case clientStatus::initializing:
+			if (initializeWSA(&wsaData) && initializeSocket())
+				status = clientStatus::connecting;
 			break;
 
-		case status::login:
+		case clientStatus::connecting:
+			if (connectToServer(clientSocket))
+				status = clientStatus::loggingIn;
+			break;
+
+		case clientStatus::loggingIn:
 			if (loginToServer(clientSocket))
-				clientStatus = status::chatRoomList;
-
+				status = clientStatus::chatRoomList;
 			break;
 
-		case status::chatRoomList:
-			if (getChatRoomListFromServer(clientSocket))
-				clientStatus = status::chatRoom;
+		case clientStatus::chatRoomList:
+			if (selectChatRoom(clientSocket))
+				status = clientStatus::chatRoom;
 			break;
 
-		case status::chatRoom:
+		case clientStatus::chatRoom:
 
 			break;
 		}
