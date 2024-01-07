@@ -4,7 +4,7 @@
 #pragma region ClientPacket
 ClientPacket::ClientPacket()
 {
-	id = clientPacketId::sendLoginData;
+	id = clientPacketId::send_login_data;
 	msgBuff = new char[0];
 	msgLen = 0;
 }
@@ -21,13 +21,13 @@ void ClientPacket::setData(char* msgBuff, int msgLen)
 
 SendLoginDataPacket::SendLoginDataPacket()
 {
-	id = clientPacketId::sendLoginData;
+	id = clientPacketId::send_login_data;
 	account = "";
 	password = "";
 }
 SendLoginDataPacket::SendLoginDataPacket(string account, string password)
 {
-	id = clientPacketId::sendLoginData;
+	id = clientPacketId::send_login_data;
 	this->account = account;
 	this->password = password;
 
@@ -35,7 +35,7 @@ SendLoginDataPacket::SendLoginDataPacket(string account, string password)
 	msgBuff = new char[BUFF_SIZE] { 0 };
 
 	//packetId(1) + totoalSize(2) + accountSize(2) + account + passwordSize(2) + password + \0
-	msgBuff[buffIndex++] = to_char(clientPacketId::sendLoginData);
+	msgBuff[buffIndex++] = to_char(clientPacketId::send_login_data);
 
 	msgBuff[buffIndex++] = to_char((account.length() + password.length() + 4) / 10);
 	msgBuff[buffIndex++] = to_char((account.length() + password.length() + 4) % 10);
@@ -76,12 +76,12 @@ void SendLoginDataPacket::setData(char* msgBuff, int msgLen)
 
 GetChatRoomListPacket::GetChatRoomListPacket()
 {
-	id = clientPacketId::getChatRoomList;
+	id = clientPacketId::get_chat_room_list;
 
 	int buffIndex = 0;
 	msgBuff = new char[BUFF_SIZE] { 0 };
 
-	msgBuff[buffIndex++] = to_char(clientPacketId::getChatRoomList);
+	msgBuff[buffIndex++] = to_char(clientPacketId::get_chat_room_list);
 	msgBuff[buffIndex] = '\0';
 
 	msgLen = strlen(msgBuff);
@@ -93,7 +93,7 @@ GetChatRoomListPacket::GetChatRoomListPacket()
 #pragma region ServerPacket
 ServerPacket::ServerPacket()
 {
-	id = serverPacketId::receiveSuccessOrFailure;
+	id = serverPacketId::receive_success_or_failure;
 	msgBuff = new char[BUFF_SIZE] { 0 };
 	msgLen = BUFF_SIZE;
 }
@@ -110,12 +110,12 @@ void ServerPacket::setData(char* msgBuff, int msgLen)
 
 SuccessOrFailurePacket::SuccessOrFailurePacket()
 {
-	id = serverPacketId::receiveSuccessOrFailure;
+	id = serverPacketId::receive_success_or_failure;
 	successOrFailureValue = false;
 }
 SuccessOrFailurePacket::SuccessOrFailurePacket(bool successOrFailureValue)
 {
-	id = serverPacketId::receiveSuccessOrFailure;
+	id = serverPacketId::receive_success_or_failure;
 	this->successOrFailureValue = successOrFailureValue;
 
 	int buffIndex = 0;
@@ -141,12 +141,12 @@ void SuccessOrFailurePacket::setData(char* msgBuff, int msgLen)
 
 ChatRoomListPacket::ChatRoomListPacket()
 {
-	id = serverPacketId::receiveChatRoomList;
+	id = serverPacketId::receive_chat_room_list;
 	chatRoomList = vector<ChatRoom>();
 }
 ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom> chatRoomList)
 {
-	id = serverPacketId::receiveChatRoomList;
+	id = serverPacketId::receive_chat_room_list;
 	this->chatRoomList = chatRoomList;
 
 	int buffIndex = 0;

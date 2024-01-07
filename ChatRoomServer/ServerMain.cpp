@@ -31,7 +31,7 @@ public:
 		ip = new char[INET_ADDRSTRLEN] { 0 };
 		account = "";
 		password = "";
-		status = clientStatus::loggingIn;
+		status = clientStatus::logging_in;
 	}
 	Client(SOCKET socket, char* ip)
 	{
@@ -39,16 +39,8 @@ public:
 		this->ip = ip;
 		account = "";
 		password = "";
-		status = clientStatus::loggingIn;
+		status = clientStatus::logging_in;
 	}
-	//Client(SOCKET socket, char* ip, string account, string password, clientStatus status)
-	//{
-	//	this->socket = socket;
-	//	this->ip = ip;
-	//	this->account = account;
-	//	this->password = password;
-	//	this->status = status;
-	//}
 
 	void setAccountAndPassword(string account, string password)
 	{
@@ -64,7 +56,7 @@ bool equal(Client& c1, Client& c2)
 class Server
 {
 public:
-	static Server instance;
+	static Server* instance;
 	SOCKET socket;
 	vector<Client> clientList;
 	vector<thread> clientThreadList;
@@ -72,6 +64,8 @@ public:
 
 private:
 	map<string, string> accountAndPassword;
+
+	shared_mutex accountAndPassword_mutex, chatRoomList_mutex;
 
 private:
 	Server()
@@ -81,39 +75,52 @@ private:
 		clientThreadList = vector<thread>();
 		chatRoomList = vector<ChatRoom>();
 		accountAndPassword = map<string, string>();
+		chatRoomList = vector<ChatRoom>();
 	}
 
 public:
 	static Server& getInstance()
 	{
-		return instance;
+		return *instance;
 	}
 
-	bool checkAccountExist(string account)
+	map<string, string> getAccountAndPasswordList()
 	{
-		return accountAndPassword.find(account) != accountAndPassword.end();
+		shared_lock<shared_mutex> lock(accountAndPassword_mutex);
+
+		return accountAndPassword;
 	}
-	bool addNewAccount(string account, string password)
+	bool addNewAccountAndPassword(string account, string password)
 	{
-		if (checkAccountExist(account))
+		unique_lock<shared_mutex> lock(accountAndPassword_mutex);
+
+		if (accountAndPassword.find(account) != accountAndPassword.end())
 			return false;
 
 		accountAndPassword[account] = password;
 	}
 	bool checkAccountAndPassword(string account, string password)
 	{
-		return checkAccountExist(account) && accountAndPassword[account] == password;
+		map<string, string> accountAndPassword = getAccountAndPasswordList();
+
+		return accountAndPassword.find(account) != accountAndPassword.end()
+			&& accountAndPassword[account] == password;
 	}
 
+	vector<ChatRoom> getChatRoomList()
+	{
+
+	}
 	bool addNewChatRoom(string chatRoomName)
 	{
 		chatRoomList.emplace_back(7, chatRoomName);
 		return true;
 	}
 
+
 	void closeClient(Client* client)
 	{
-		if (client->status == clientStatus::nullStatus)
+		if (client->status == clientStatus::null_status)
 			return;
 
 		for (int i = 0; i < clientList.size(); i++)
@@ -126,11 +133,11 @@ public:
 				break;
 			}
 		}
-		client->status = clientStatus::nullStatus;
+		client->status = clientStatus::null_status;
 		closesocket(client->socket);
 	}
 };
-Server Server::instance = Server();
+Server* Server::instance = new Server();
 Server& serverInstance = Server::getInstance();
 
 
@@ -145,7 +152,7 @@ void restartServerErrorPrint(string errorFunctionName)
 }
 void reconnectClientErrorPrint(string errorFunctionName, Client* client)
 {
-	if (client->status == clientStatus::nullStatus)
+	if (client->status == clientStatus::null_status)
 		return;
 
 	cerr << "When processing " << client->account << "-" << client->ip << ", " << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
@@ -351,7 +358,7 @@ void clientProcess(Client* client)
 
 	while (true)
 	{
-		if (client->status == clientStatus::nullStatus)
+		if (client->status == clientStatus::null_status)
 			return;
 
 		if (!receivePacketIdFromClient(client, &packetId))
@@ -362,27 +369,27 @@ void clientProcess(Client* client)
 
 		switch (packetId)
 		{
-		case clientPacketId::sendLoginData:
+		case clientPacketId::send_login_data:
 			bool loginSuccessOrFailure;
 			if (!clientLogin(client, &loginSuccessOrFailure))
 				return;
 			if (loginSuccessOrFailure)
-				client->status = clientStatus::chatRoomList;
+				client->status = clientStatus::chat_room_list;
 			break;
 
-		case clientPacketId::getChatRoomList:
+		case clientPacketId::get_chat_room_list:
 			if (!clientGetChatRoomList(client))
 				return;
 			break;
 
-		case clientPacketId::selectChatRoom:
+		case clientPacketId::select_chat_room:
 			if (!clientJoinChatRoom(client))
 				return;
 			break;
 
-		case clientPacketId::sendChatRoomMessage:
+		case clientPacketId::send_chat_room_message:
 
-				client->status = clientStatus::chatRoom;
+				client->status = clientStatus::chat_room;
 			break;
 		}
 	}
@@ -393,8 +400,8 @@ void clientProcess(Client* client)
 int main()
 {
 	//test
-	serverInstance.addNewAccount("aa", "123");
-	serverInstance.addNewAccount("2", "123");
+	serverInstance.addNewAccountAndPassword("aa", "123");
+	serverInstance.addNewAccountAndPassword("2", "123");
 	serverInstance.addNewChatRoom("newaa");
 	serverInstance.addNewChatRoom("eeeeeeee");
 	//test

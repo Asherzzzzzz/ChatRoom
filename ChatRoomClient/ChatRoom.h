@@ -23,26 +23,26 @@ using namespace std;
 
 enum clientPacketId
 {
-	sendLoginData,
-	getChatRoomList,
-	selectChatRoom,
-	sendChatRoomMessage
+	send_login_data,
+	get_chat_room_list,
+	select_chat_room,
+	send_chat_room_message
 };
 enum serverPacketId
 {
-	receiveSuccessOrFailure,
-	receiveChatRoomList,
-	receiveChatRoomMessage
+	receive_success_or_failure,
+	receive_chat_room_list,
+	receive_chat_room_message
 };
 
 enum clientStatus
 {
-	nullStatus,
+	null_status,
 	initializing,
 	connecting,
-	loggingIn,
-	chatRoomList,
-	chatRoom
+	logging_in,
+	chat_room_list,
+	chat_room
 };
 
 

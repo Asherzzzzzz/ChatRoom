@@ -260,20 +260,20 @@ int main()
 
 		case clientStatus::connecting:
 			if (connectToServer(clientSocket))
-				status = clientStatus::loggingIn;
+				status = clientStatus::logging_in;
 			break;
 
-		case clientStatus::loggingIn:
+		case clientStatus::logging_in:
 			if (loginToServer(clientSocket))
-				status = clientStatus::chatRoomList;
+				status = clientStatus::chat_room_list;
 			break;
 
-		case clientStatus::chatRoomList:
+		case clientStatus::chat_room_list:
 			if (joinChatRoom(clientSocket))
-				status = clientStatus::chatRoom;
+				status = clientStatus::chat_room;
 			break;
 
-		case clientStatus::chatRoom:
+		case clientStatus::chat_room:
 
 			break;
 		}

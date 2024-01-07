@@ -2,7 +2,7 @@
 #define PACKET_HEADER
 
 #include <string>
-#include <string.h>
+#include <cstring>
 #include <vector>
 
 #include "ChatRoom.h"
