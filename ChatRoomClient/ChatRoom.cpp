@@ -31,3 +31,14 @@ ChatRoom::ChatRoom(int id, string name)
 	this->id = id;
 	this->name = name;
 }
+
+ChatRoomMsg::ChatRoomMsg()
+{
+	this->sender = "";
+	this->msg = "";
+}
+ChatRoomMsg::ChatRoomMsg(string sender, string msg)
+{
+	this->sender = sender;
+	this->msg = msg;
+}

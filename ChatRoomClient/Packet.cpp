@@ -35,7 +35,7 @@ SendLoginDataPacket::SendLoginDataPacket(string account, string password)
 	msgBuff = new char[BUFF_SIZE] { 0 };
 
 	//packetId(1) + totoalSize(2) + accountSize(2) + account + passwordSize(2) + password + \0
-	msgBuff[buffIndex++] = to_char(clientPacketId::send_login_data);
+	msgBuff[buffIndex++] = to_char(id);
 
 	msgBuff[buffIndex++] = to_char((account.length() + password.length() + 4) / 10);
 	msgBuff[buffIndex++] = to_char((account.length() + password.length() + 4) % 10);
@@ -44,15 +44,16 @@ SendLoginDataPacket::SendLoginDataPacket(string account, string password)
 	msgBuff[buffIndex++] = to_char(account.length() % 10);
 	msgBuff[buffIndex] = '\0';
 
-	strcat_s(msgBuff, buffIndex + account.length() + 1, account.c_str());
+	strcat(msgBuff, account.c_str());
 	buffIndex += account.length();
 
 	msgBuff[buffIndex++] = to_char(password.length() / 10);
 	msgBuff[buffIndex++] = to_char(password.length() % 10);
 	msgBuff[buffIndex] = '\0';
 
-	strcat_s(msgBuff, buffIndex + password.length() + 1, password.c_str());
+	strcat(msgBuff, password.c_str());
 	buffIndex += password.length();
+	msgBuff[buffIndex] = '\0';
 
 	msgLen = strlen(msgBuff);
 }
@@ -74,6 +75,44 @@ void SendLoginDataPacket::setData(char* msgBuff, int msgLen)
 }
 
 
+SendSignUpDataPacket::SendSignUpDataPacket()
+{
+	id = clientPacketId::send_sign_up_data;
+}
+SendSignUpDataPacket::SendSignUpDataPacket(string account, string password)
+{
+	id = clientPacketId::send_sign_up_data;
+	this->account = account;
+	this->password = password;
+
+	int buffIndex = 0;
+	msgBuff = new char[BUFF_SIZE] { 0 };
+
+	//packetId(1) + totoalSize(2) + accountSize(2) + account + passwordSize(2) + password + \0
+	msgBuff[buffIndex++] = to_char(id);
+
+	msgBuff[buffIndex++] = to_char((account.length() + password.length() + 4) / 10);
+	msgBuff[buffIndex++] = to_char((account.length() + password.length() + 4) % 10);
+
+	msgBuff[buffIndex++] = to_char(account.length() / 10);
+	msgBuff[buffIndex++] = to_char(account.length() % 10);
+	msgBuff[buffIndex] = '\0';
+
+	strcat(msgBuff, account.c_str());
+	buffIndex += account.length();
+
+	msgBuff[buffIndex++] = to_char(password.length() / 10);
+	msgBuff[buffIndex++] = to_char(password.length() % 10);
+	msgBuff[buffIndex] = '\0';
+
+	strcat(msgBuff, password.c_str());
+	buffIndex += password.length();
+	msgBuff[buffIndex] = '\0';
+
+	msgLen = strlen(msgBuff);
+}
+
+
 GetChatRoomListPacket::GetChatRoomListPacket()
 {
 	id = clientPacketId::get_chat_room_list;
@@ -81,11 +120,147 @@ GetChatRoomListPacket::GetChatRoomListPacket()
 	int buffIndex = 0;
 	msgBuff = new char[BUFF_SIZE] { 0 };
 
-	msgBuff[buffIndex++] = to_char(clientPacketId::get_chat_room_list);
+	msgBuff[buffIndex++] = to_char(id);
 	msgBuff[buffIndex] = '\0';
 
 	msgLen = strlen(msgBuff);
 }
+
+
+SelectChatRoomPacket::SelectChatRoomPacket()
+{
+	id = clientPacketId::select_chat_room;
+	chatRoomName = "";
+}
+SelectChatRoomPacket::SelectChatRoomPacket(string chatRoomName)
+{
+	id = clientPacketId::select_chat_room;
+	this->chatRoomName = chatRoomName;
+
+	int buffIndex = 0;
+	msgBuff = new char[BUFF_SIZE] { 0 };
+
+	//packetId(1) + totoalSize(2) + chatRoomNameSize(2) + chatRoomName + \0
+	msgBuff[buffIndex++] = to_char(id);
+
+	msgBuff[buffIndex++] = to_char((chatRoomName.length() + 2) / 10);
+	msgBuff[buffIndex++] = to_char((chatRoomName.length() + 2) % 10);
+
+	msgBuff[buffIndex++] = to_char(chatRoomName.length() / 10);
+	msgBuff[buffIndex++] = to_char(chatRoomName.length() % 10);
+	msgBuff[buffIndex] = '\0';
+
+	strcat(msgBuff, chatRoomName.c_str());
+	buffIndex += chatRoomName.length();
+	msgBuff[buffIndex] = '\0';
+
+	msgLen = strlen(msgBuff);
+}
+void SelectChatRoomPacket::setData(char* msgBuff, int msgLen)
+{
+	ClientPacket::setData(msgBuff, msgLen);
+
+	int hasRead = 0;
+
+	int chatRoomNameLen = to_int(msgBuff + hasRead, 2);
+	hasRead += 2;
+	chatRoomName.assign(msgBuff + hasRead, msgBuff + hasRead + chatRoomNameLen);
+	hasRead += chatRoomNameLen;
+}
+
+
+GetChatRoomMsgPacket::GetChatRoomMsgPacket()
+{
+	id = clientPacketId::get_chat_room_message;
+	nowChatRoomMsgListSize = 0;
+}
+GetChatRoomMsgPacket::GetChatRoomMsgPacket(int nowChatRoomMsgListSize)
+{
+	id = clientPacketId::get_chat_room_message;
+	this->nowChatRoomMsgListSize = nowChatRoomMsgListSize;
+
+	int buffIndex = 0;
+	msgBuff = new char[BUFF_SIZE] { 0 };
+
+	//packetId(1) + totoalSize(2) + nowChatRoomMsgListSize(4) + \0
+	msgBuff[buffIndex++] = to_char(id);
+
+	msgBuff[buffIndex++] = '0';
+	msgBuff[buffIndex++] = '4';
+
+	msgBuff[buffIndex++] = to_char(nowChatRoomMsgListSize / 1000);
+	msgBuff[buffIndex++] = to_char(nowChatRoomMsgListSize / 100 % 10);
+	msgBuff[buffIndex++] = to_char(nowChatRoomMsgListSize / 10 % 10);
+	msgBuff[buffIndex++] = to_char(nowChatRoomMsgListSize % 10);
+	msgBuff[buffIndex] = '\0';
+
+	msgLen = strlen(msgBuff);
+}
+void GetChatRoomMsgPacket::setData(char* msgBuff, int msgLen)
+{
+	ClientPacket::setData(msgBuff, msgLen);
+
+	nowChatRoomMsgListSize = to_int(msgBuff, 4);
+}
+
+
+SendChatRoomMsgPacket::SendChatRoomMsgPacket()
+{
+	id = clientPacketId::send_chat_room_message;
+	chatRoomMsg = ChatRoomMsg();
+}
+SendChatRoomMsgPacket::SendChatRoomMsgPacket(ChatRoomMsg chatRoomMsg)
+{
+	id = clientPacketId::send_chat_room_message;
+	this->chatRoomMsg = chatRoomMsg;
+
+	int buffIndex = 0;
+	msgBuff = new char[BUFF_SIZE] { 0 };
+
+	//packetId(1) + totoalSize(2) + senderSize(2) + sender + chatRoomMsgSize(2) + chatRoomMsg + \0
+	msgBuff[buffIndex++] = to_char(id);
+
+	msgBuff[buffIndex++] = to_char((chatRoomMsg.sender.length() + chatRoomMsg.msg.length() + 4) / 10);
+	msgBuff[buffIndex++] = to_char((chatRoomMsg.sender.length() + chatRoomMsg.msg.length() + 4) % 10);
+
+	msgBuff[buffIndex++] = to_char(chatRoomMsg.sender.length() / 10);
+	msgBuff[buffIndex++] = to_char(chatRoomMsg.sender.length() % 10);
+	msgBuff[buffIndex] = '\0';
+
+	strcat(msgBuff + buffIndex, chatRoomMsg.sender.c_str());
+	buffIndex += chatRoomMsg.sender.length();
+
+	msgBuff[buffIndex++] = to_char(chatRoomMsg.msg.length() / 10);
+	msgBuff[buffIndex++] = to_char(chatRoomMsg.msg.length() % 10);
+	msgBuff[buffIndex] = '\0';
+
+	strcat(msgBuff + buffIndex, chatRoomMsg.msg.c_str());
+	buffIndex += chatRoomMsg.msg.length();
+
+	msgBuff[buffIndex] = '\0';
+
+	msgLen = strlen(msgBuff);
+}
+void SendChatRoomMsgPacket::setData(char* msgBuff, int msgLen)
+{
+	ClientPacket::setData(msgBuff, msgLen);
+
+	int senderLen, chatRoomMsgLen;
+	int hasRead = 0;
+
+	senderLen = to_int(msgBuff + hasRead, 2);
+	hasRead += 2;
+
+	chatRoomMsg.sender.assign(msgBuff + hasRead, msgBuff + hasRead + senderLen);
+	hasRead += senderLen;
+
+	chatRoomMsgLen = to_int(msgBuff + hasRead, 2);
+	hasRead += 2;
+
+	chatRoomMsg.msg.assign(msgBuff + hasRead, msgBuff + hasRead + chatRoomMsgLen);
+	hasRead += chatRoomMsgLen;
+}
+
 #pragma endregion
 
 
@@ -144,22 +319,24 @@ ChatRoomListPacket::ChatRoomListPacket()
 	id = serverPacketId::receive_chat_room_list;
 	chatRoomList = vector<ChatRoom>();
 }
-ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom> chatRoomList)
+ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom>* chatRoomList)
 {
 	id = serverPacketId::receive_chat_room_list;
-	this->chatRoomList = chatRoomList;
+	this->chatRoomList = *chatRoomList;
 
 	int buffIndex = 0;
 	msgBuff = new char[BUFF_SIZE] { 0 };
 
-	//packetId(1) + totoalSize(4) + roomId(2) + roomNameSize(2) + roomName + ... + \0
+	//packetId(1) + totoalSize(4) + chatRoomId(2) + chatRoomNameSize(2) + chatRoomName + ... + \0
 	msgBuff[buffIndex++] = to_char(id);
 
 	int totalSizeIndex = buffIndex;
 	buffIndex += 4;
 	int totalSize = 0;
 
-	for (ChatRoom chatRoom : chatRoomList)
+	msgBuff[buffIndex] = '\0';
+
+	for (ChatRoom chatRoom : *chatRoomList)
 	{
 		msgBuff[buffIndex++] = to_char(chatRoom.id / 10);
 		msgBuff[buffIndex++] = to_char(chatRoom.id % 10);
@@ -168,8 +345,9 @@ ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom> chatRoomList)
 		msgBuff[buffIndex++] = to_char(chatRoom.name.length() % 10);
 		msgBuff[buffIndex] = '\0';
 
-		strcat_s(msgBuff + buffIndex, buffIndex + chatRoom.name.length() + 1, chatRoom.name.c_str());
+		strcat(msgBuff + buffIndex, chatRoom.name.c_str());
 		buffIndex += chatRoom.name.length();
+		msgBuff[buffIndex] = '\0';
 
 		totalSize += 4 + chatRoom.name.length();
 	}
@@ -203,6 +381,87 @@ void ChatRoomListPacket::setData(char* msgBuff, int msgLen)
 		hasRead += chatRoomNameLen;
 
 		chatRoomList.emplace_back(chatRoomId, chatRoomName);
+	}
+}
+
+
+ChatRoomMsgPacket::ChatRoomMsgPacket()
+{
+	id = serverPacketId::receive_chat_room_message;
+	chatRoomMsgList = vector<ChatRoomMsg>();
+}
+ChatRoomMsgPacket::ChatRoomMsgPacket(vector<ChatRoomMsg>* chatRoomMsgList)
+{
+	id = serverPacketId::receive_chat_room_message;
+	this->chatRoomMsgList = *chatRoomMsgList;
+
+	int buffIndex = 0;
+	msgBuff = new char[BUFF_SIZE] { 0 };
+
+	//packetId(1) + totoalSize(4) + senderSize(2) + sender + chatRoomMsgSize(2) + chatRoomMsg + ... + \0
+	msgBuff[buffIndex++] = to_char(id);
+
+	int totalSizeIndex = buffIndex;
+	buffIndex += 4;
+	int totalSize = 0;
+
+	msgBuff[buffIndex] = '\0';
+
+	for (ChatRoomMsg msg : *chatRoomMsgList)
+	{
+		msgBuff[buffIndex++] = to_char(msg.sender.length() / 10);
+		msgBuff[buffIndex++] = to_char(msg.sender.length() % 10);
+		msgBuff[buffIndex] = '\0';
+
+		strcat(msgBuff + buffIndex, msg.sender.c_str());
+		buffIndex += msg.sender.length();
+
+		msgBuff[buffIndex++] = to_char(msg.msg.length() / 10);
+		msgBuff[buffIndex++] = to_char(msg.msg.length() % 10);
+		msgBuff[buffIndex] = '\0';
+
+		strcat(msgBuff + buffIndex, msg.msg.c_str());
+		buffIndex += msg.msg.length();
+
+		msgBuff[buffIndex] = '\0';
+
+		totalSize += 4 + msg.sender.length() + msg.msg.length();
+	}
+
+	msgBuff[totalSizeIndex++] = to_char(totalSize / 1000);
+	msgBuff[totalSizeIndex++] = to_char(totalSize / 100 % 10);
+	msgBuff[totalSizeIndex++] = to_char(totalSize / 10 % 10);
+	msgBuff[totalSizeIndex++] = to_char(totalSize % 10);
+
+	msgLen = strlen(msgBuff);
+}
+int ChatRoomMsgPacket::getTotalSizeLength()
+{
+	return 4;
+}
+void ChatRoomMsgPacket::setData(char* msgBuff, int msgLen)
+{
+	ServerPacket::setData(msgBuff, msgLen);
+
+	int hasRead = 0;
+
+	int senderLen, chatRoomMsgLen;
+	string sender, chatRoomMsg;
+	while (hasRead < msgLen)
+	{
+		senderLen = to_int(msgBuff + hasRead, 2);
+		hasRead += 2;
+
+		sender.assign(msgBuff + hasRead, msgBuff + hasRead + senderLen);
+		hasRead += senderLen;
+
+		chatRoomMsgLen = to_int(msgBuff + hasRead, 2);
+		hasRead += 2;
+
+		chatRoomMsg.assign(msgBuff + hasRead, msgBuff + hasRead + chatRoomMsgLen);
+		hasRead += chatRoomMsgLen;
+
+		chatRoomMsgList.emplace_back(sender, chatRoomMsg);
 	}
 }
 #pragma endregion

@@ -154,7 +154,7 @@ void reconnectClientErrorPrint(string errorFunctionName, Client* client)
 {
 	if (client->status == clientStatus::null_status)
 		return;
-
+	
 	cerr << "When processing " << client->account << "-" << client->ip << ", " << errorFunctionName << "() failed with error: " << WSAGetLastError() << endl;
 	serverInstance.closeClient(client);
 }

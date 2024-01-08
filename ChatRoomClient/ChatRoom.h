@@ -7,10 +7,12 @@ using namespace std;
 
 
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 9909
+#define SERVER_IP "202.5.254.88"
+#define SERVER_PORT 8080
 
 #define RESTART_WAIT_MS 5000
+#define GET_CHAT_ROOM_LIST_WAIT_MS 5000
+#define GET_CHAT_ROOM_MSG_WAIT_MS 2500
 
 #define BUFF_SIZE 1024
 
@@ -24,8 +26,10 @@ using namespace std;
 enum clientPacketId
 {
 	send_login_data,
+	send_sign_up_data,
 	get_chat_room_list,
 	select_chat_room,
+	get_chat_room_message,
 	send_chat_room_message
 };
 enum serverPacketId
@@ -54,6 +58,15 @@ public:
 
 	ChatRoom();
 	ChatRoom(int, string);
+};
+
+class ChatRoomMsg
+{
+public:
+	string sender, msg;
+
+	ChatRoomMsg();
+	ChatRoomMsg(string, string);
 };
 
 

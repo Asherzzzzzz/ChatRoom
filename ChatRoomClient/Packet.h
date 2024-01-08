@@ -33,11 +33,47 @@ public:
 	void setData(char*, int);
 };
 
+class SendSignUpDataPacket : public SendLoginDataPacket
+{
+public:
+	SendSignUpDataPacket();
+	SendSignUpDataPacket(string, string);
+};
+
 class GetChatRoomListPacket : public ClientPacket
 {
 public:
 	GetChatRoomListPacket();
-	//void setData(char*, int);
+};
+
+class SelectChatRoomPacket : public ClientPacket
+{
+public:
+	string chatRoomName;
+
+	SelectChatRoomPacket();
+	SelectChatRoomPacket(string);
+	void setData(char*, int);
+};
+
+class GetChatRoomMsgPacket : public ClientPacket
+{
+public:
+	int nowChatRoomMsgListSize;
+
+	GetChatRoomMsgPacket();
+	GetChatRoomMsgPacket(int);
+	void setData(char*, int);
+};
+
+class SendChatRoomMsgPacket : public ClientPacket
+{
+public:
+	ChatRoomMsg chatRoomMsg;
+
+	SendChatRoomMsgPacket();
+	SendChatRoomMsgPacket(ChatRoomMsg);
+	void setData(char*, int);
 };
 #pragma endregion
 
@@ -71,7 +107,18 @@ public:
 	vector<ChatRoom> chatRoomList;
 
 	ChatRoomListPacket();
-	ChatRoomListPacket(vector<ChatRoom>);
+	ChatRoomListPacket(vector<ChatRoom>*);
+	int getTotalSizeLength();
+	void setData(char*, int);
+};
+
+class ChatRoomMsgPacket : public ServerPacket
+{
+public:
+	vector<ChatRoomMsg> chatRoomMsgList;
+
+	ChatRoomMsgPacket();
+	ChatRoomMsgPacket(vector<ChatRoomMsg>*);
 	int getTotalSizeLength();
 	void setData(char*, int);
 };
