@@ -8,6 +8,11 @@ ClientPacket::ClientPacket()
 	msgBuff = new char[0];
 	msgLen = 0;
 }
+ClientPacket::~ClientPacket()
+{
+	delete msgBuff;
+	msgBuff = nullptr;
+}
 int ClientPacket::getTotalSizeLength()
 {
 	return NORMAL_TOTAL_SIZE_LENGTH;
@@ -169,6 +174,37 @@ void SelectChatRoomPacket::setData(char* msgBuff, int msgLen)
 }
 
 
+CreateChatRoomPacket::CreateChatRoomPacket()
+{
+	id = clientPacketId::create_chat_room;
+	chatRoomName = "";
+}
+CreateChatRoomPacket::CreateChatRoomPacket(string chatRoomName)
+{
+	id = clientPacketId::create_chat_room;
+	this->chatRoomName = chatRoomName;
+
+	int buffIndex = 0;
+	msgBuff = new char[BUFF_SIZE] { 0 };
+
+	//packetId(1) + totoalSize(2) + chatRoomNameSize(2) + chatRoomName + \0
+	msgBuff[buffIndex++] = to_char(id);
+
+	msgBuff[buffIndex++] = to_char((chatRoomName.length() + 2) / 10);
+	msgBuff[buffIndex++] = to_char((chatRoomName.length() + 2) % 10);
+
+	msgBuff[buffIndex++] = to_char(chatRoomName.length() / 10);
+	msgBuff[buffIndex++] = to_char(chatRoomName.length() % 10);
+	msgBuff[buffIndex] = '\0';
+
+	strcat(msgBuff, chatRoomName.c_str());
+	buffIndex += chatRoomName.length();
+	msgBuff[buffIndex] = '\0';
+
+	msgLen = strlen(msgBuff);
+}
+
+
 GetChatRoomMsgPacket::GetChatRoomMsgPacket()
 {
 	id = clientPacketId::get_chat_room_message;
@@ -209,10 +245,10 @@ SendChatRoomMsgPacket::SendChatRoomMsgPacket()
 	id = clientPacketId::send_chat_room_message;
 	chatRoomMsg = ChatRoomMsg();
 }
-SendChatRoomMsgPacket::SendChatRoomMsgPacket(ChatRoomMsg chatRoomMsg)
+SendChatRoomMsgPacket::SendChatRoomMsgPacket(string sender, string chatRoomMsg)
 {
 	id = clientPacketId::send_chat_room_message;
-	this->chatRoomMsg = chatRoomMsg;
+	this->chatRoomMsg = ChatRoomMsg(sender, chatRoomMsg);
 
 	int buffIndex = 0;
 	msgBuff = new char[BUFF_SIZE] { 0 };
@@ -220,22 +256,22 @@ SendChatRoomMsgPacket::SendChatRoomMsgPacket(ChatRoomMsg chatRoomMsg)
 	//packetId(1) + totoalSize(2) + senderSize(2) + sender + chatRoomMsgSize(2) + chatRoomMsg + \0
 	msgBuff[buffIndex++] = to_char(id);
 
-	msgBuff[buffIndex++] = to_char((chatRoomMsg.sender.length() + chatRoomMsg.msg.length() + 4) / 10);
-	msgBuff[buffIndex++] = to_char((chatRoomMsg.sender.length() + chatRoomMsg.msg.length() + 4) % 10);
+	msgBuff[buffIndex++] = to_char((sender.length() + chatRoomMsg.length() + 4) / 10);
+	msgBuff[buffIndex++] = to_char((sender.length() + chatRoomMsg.length() + 4) % 10);
 
-	msgBuff[buffIndex++] = to_char(chatRoomMsg.sender.length() / 10);
-	msgBuff[buffIndex++] = to_char(chatRoomMsg.sender.length() % 10);
+	msgBuff[buffIndex++] = to_char(sender.length() / 10);
+	msgBuff[buffIndex++] = to_char(sender.length() % 10);
 	msgBuff[buffIndex] = '\0';
 
-	strcat(msgBuff + buffIndex, chatRoomMsg.sender.c_str());
-	buffIndex += chatRoomMsg.sender.length();
+	strcat(msgBuff + buffIndex, sender.c_str());
+	buffIndex += sender.length();
 
-	msgBuff[buffIndex++] = to_char(chatRoomMsg.msg.length() / 10);
-	msgBuff[buffIndex++] = to_char(chatRoomMsg.msg.length() % 10);
+	msgBuff[buffIndex++] = to_char(chatRoomMsg.length() / 10);
+	msgBuff[buffIndex++] = to_char(chatRoomMsg.length() % 10);
 	msgBuff[buffIndex] = '\0';
 
-	strcat(msgBuff + buffIndex, chatRoomMsg.msg.c_str());
-	buffIndex += chatRoomMsg.msg.length();
+	strcat(msgBuff + buffIndex, chatRoomMsg.c_str());
+	buffIndex += chatRoomMsg.length();
 
 	msgBuff[buffIndex] = '\0';
 
@@ -264,6 +300,8 @@ void SendChatRoomMsgPacket::setData(char* msgBuff, int msgLen)
 #pragma endregion
 
 
+//------------------------------------------------------------------------------------------------------------
+
 
 #pragma region ServerPacket
 ServerPacket::ServerPacket()
@@ -271,6 +309,11 @@ ServerPacket::ServerPacket()
 	id = serverPacketId::receive_success_or_failure;
 	msgBuff = new char[BUFF_SIZE] { 0 };
 	msgLen = BUFF_SIZE;
+}
+ServerPacket::~ServerPacket()
+{
+	delete msgBuff;
+	msgBuff = nullptr;
 }
 int ServerPacket::getTotalSizeLength()
 {
@@ -319,10 +362,10 @@ ChatRoomListPacket::ChatRoomListPacket()
 	id = serverPacketId::receive_chat_room_list;
 	chatRoomList = vector<ChatRoom>();
 }
-ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom>* chatRoomList)
+ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom>& chatRoomList)
 {
 	id = serverPacketId::receive_chat_room_list;
-	this->chatRoomList = *chatRoomList;
+	this->chatRoomList = chatRoomList;
 
 	int buffIndex = 0;
 	msgBuff = new char[BUFF_SIZE] { 0 };
@@ -336,7 +379,7 @@ ChatRoomListPacket::ChatRoomListPacket(vector<ChatRoom>* chatRoomList)
 
 	msgBuff[buffIndex] = '\0';
 
-	for (ChatRoom chatRoom : *chatRoomList)
+	for (ChatRoom chatRoom : chatRoomList)
 	{
 		msgBuff[buffIndex++] = to_char(chatRoom.id / 10);
 		msgBuff[buffIndex++] = to_char(chatRoom.id % 10);
@@ -390,13 +433,13 @@ ChatRoomMsgPacket::ChatRoomMsgPacket()
 	id = serverPacketId::receive_chat_room_message;
 	chatRoomMsgList = vector<ChatRoomMsg>();
 }
-ChatRoomMsgPacket::ChatRoomMsgPacket(vector<ChatRoomMsg>* chatRoomMsgList)
+ChatRoomMsgPacket::ChatRoomMsgPacket(vector<ChatRoomMsg>& chatRoomMsgList)
 {
 	id = serverPacketId::receive_chat_room_message;
-	this->chatRoomMsgList = *chatRoomMsgList;
+	this->chatRoomMsgList = chatRoomMsgList;
 
 	int buffIndex = 0;
-	msgBuff = new char[BUFF_SIZE] { 0 };
+	msgBuff = new char[CHAT_ROOM_MSG_BUFF_SIZE] { 0 };
 
 	//packetId(1) + totoalSize(4) + senderSize(2) + sender + chatRoomMsgSize(2) + chatRoomMsg + ... + \0
 	msgBuff[buffIndex++] = to_char(id);
@@ -407,7 +450,7 @@ ChatRoomMsgPacket::ChatRoomMsgPacket(vector<ChatRoomMsg>* chatRoomMsgList)
 
 	msgBuff[buffIndex] = '\0';
 
-	for (ChatRoomMsg msg : *chatRoomMsgList)
+	for (ChatRoomMsg msg : chatRoomMsgList)
 	{
 		msgBuff[buffIndex++] = to_char(msg.sender.length() / 10);
 		msgBuff[buffIndex++] = to_char(msg.sender.length() % 10);

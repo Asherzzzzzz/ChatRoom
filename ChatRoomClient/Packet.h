@@ -19,6 +19,7 @@ public:
 	int msgLen;
 
 	ClientPacket();
+	~ClientPacket();
 	virtual int getTotalSizeLength();
 	virtual void setData(char*, int);
 };
@@ -56,6 +57,13 @@ public:
 	void setData(char*, int);
 };
 
+class CreateChatRoomPacket : public SelectChatRoomPacket
+{
+public:
+	CreateChatRoomPacket();
+	CreateChatRoomPacket(string);
+};
+
 class GetChatRoomMsgPacket : public ClientPacket
 {
 public:
@@ -72,7 +80,7 @@ public:
 	ChatRoomMsg chatRoomMsg;
 
 	SendChatRoomMsgPacket();
-	SendChatRoomMsgPacket(ChatRoomMsg);
+	SendChatRoomMsgPacket(string, string);
 	void setData(char*, int);
 };
 #pragma endregion
@@ -87,6 +95,7 @@ public:
 	int msgLen;
 
 	ServerPacket();
+	~ServerPacket();
 	virtual int getTotalSizeLength();
 	virtual void setData(char*, int);
 };
@@ -107,7 +116,7 @@ public:
 	vector<ChatRoom> chatRoomList;
 
 	ChatRoomListPacket();
-	ChatRoomListPacket(vector<ChatRoom>*);
+	ChatRoomListPacket(vector<ChatRoom>&);
 	int getTotalSizeLength();
 	void setData(char*, int);
 };
@@ -118,7 +127,7 @@ public:
 	vector<ChatRoomMsg> chatRoomMsgList;
 
 	ChatRoomMsgPacket();
-	ChatRoomMsgPacket(vector<ChatRoomMsg>*);
+	ChatRoomMsgPacket(vector<ChatRoomMsg>&);
 	int getTotalSizeLength();
 	void setData(char*, int);
 };

@@ -15,13 +15,13 @@ using namespace std;
 SOCKET clientSocket;
 clientStatus status = clientStatus::initializing;
 string clientAccount;
-vector<ChatRoomMsg> chatRoomMsgList = vector<ChatRoomMsg>();
+int nowChatRoomMsgListSize = 0;
 
 
 #pragma region Initialization
-bool initializeWSA(WSADATA* wsaData)
+bool initializeWSA(WSADATA& wsaData)
 {
-	int error = WSAStartup(MAKEWORD(2, 2), wsaData);
+	int error = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (error != 0)
 	{
 		cerr << "WSAStartup() failed with error: " << error << endl;
@@ -72,7 +72,7 @@ void reconnectErrorPrint(string errorFunctionName)
 
 
 #pragma region Send&Receive
-bool sendToServer(ClientPacket packet)
+bool sendToServer(ClientPacket& packet)
 {
 	int hasSent = 0, nowSend = 0;
 	do
@@ -88,11 +88,11 @@ bool sendToServer(ClientPacket packet)
 	return true;
 }
 
-bool receiveFromServer(ServerPacket* packet)
+bool receiveFromServer(ServerPacket& packet)
 {
 	// id section
 	int hasReceived = 0;
-	char* buff = new char[packet->getTotalSizeLength()];
+	char* buff = new char[packet.getTotalSizeLength()];
 
 	hasReceived = recv(clientSocket, buff, 1, 0);
 	if (hasReceived == SOCKET_ERROR)
@@ -101,17 +101,17 @@ bool receiveFromServer(ServerPacket* packet)
 		return false;
 	}
 	
-	serverPacketId id = (serverPacketId)to_int(buff, 1);
+	//serverPacketId id = (serverPacketId)to_int(buff, 1);
 
 	// total length section
-	hasReceived = recv(clientSocket, buff, packet->getTotalSizeLength(), 0);
+	hasReceived = recv(clientSocket, buff, packet.getTotalSizeLength(), 0);
 	if (hasReceived == SOCKET_ERROR)
 	{
 		restartErrorPrint("recv");
 		return false;
 	}
 
-	int msgLen = to_int(buff, packet->getTotalSizeLength());
+	int msgLen = to_int(buff, packet.getTotalSizeLength());
 
 	// msg section
 	int nowReceive = 0;
@@ -128,7 +128,7 @@ bool receiveFromServer(ServerPacket* packet)
 		hasReceived += nowReceive;
 	} 
 
-	packet->setData(msgBuff, msgLen);
+	packet.setData(msgBuff, msgLen);
 
 	return true;
 }
@@ -162,9 +162,11 @@ bool signUpOrLogin()
 	cin >> cmd;
 	cin.get();
 
+	system("cls");
+
 	if (cmd == "/signup")
 	{
-		cout << "Account and password length must less than " << ACCOUNT_SIZE << " characters" << endl;
+		cout << "*Account and password length must less than " << ACCOUNT_SIZE << " characters" << endl;
 
 		char* account = new char[ACCOUNT_SIZE] { 0 },
 			* password = new char[PASSWORD_SIZE] { 0 };
@@ -191,7 +193,7 @@ bool signUpOrLogin()
 
 		SuccessOrFailurePacket receiveSignUpRespondPacket;
 
-		if (!receiveFromServer(&receiveSignUpRespondPacket))
+		if (!receiveFromServer(receiveSignUpRespondPacket))
 		{
 			restartErrorPrint("receiveFromServer");
 			return false;
@@ -210,7 +212,7 @@ bool signUpOrLogin()
 	}
 	else if (cmd == "/login")
 	{
-		cout << "Account and password length must less than " << ACCOUNT_SIZE << " characters" << endl;
+		cout << "*Account and password length must less than " << ACCOUNT_SIZE << " characters" << endl;
 
 		char* account = new char[ACCOUNT_SIZE] { 0 },
 			* password = new char[PASSWORD_SIZE] { 0 };
@@ -230,7 +232,7 @@ bool signUpOrLogin()
 
 		SuccessOrFailurePacket receiveLoginRespondPacket;
 
-		if (!receiveFromServer(&receiveLoginRespondPacket))
+		if (!receiveFromServer(receiveLoginRespondPacket))
 		{
 			restartErrorPrint("receiveFromServer");
 			return false;
@@ -261,9 +263,9 @@ bool signUpOrLogin()
 
 #pragma region SelectChatRoomProcess
 mutex joinChatRoom_mutex;
-void showChatRoomList(bool* hasSelectedChatRoom, string* input, bool* noErrorOccur)
+void showChatRoomList(bool& hasSelectedChatRoom, string& input, bool& outputErrorOccur)
 {
-	while (!*hasSelectedChatRoom)
+	while (!hasSelectedChatRoom)
 	{
 		{
 			lock_guard<mutex> lock(joinChatRoom_mutex);
@@ -273,20 +275,21 @@ void showChatRoomList(bool* hasSelectedChatRoom, string* input, bool* noErrorOcc
 			if (!sendToServer(getChatRoomListPacket))
 			{
 				restartErrorPrint("sendToServer");
-				*noErrorOccur = false;
+				outputErrorOccur = true;
 				return;
 			}
 
 			ChatRoomListPacket receiveChatRoomListPacket;
 
-			if (!receiveFromServer(&receiveChatRoomListPacket))
+			if (!receiveFromServer(receiveChatRoomListPacket))
 			{
 				restartErrorPrint("receiveFromServer");
-				*noErrorOccur = false;
+				outputErrorOccur = true;
 				return;
 			}
 
 			system("cls");
+			cout << "Command: /join [chat room name]\n         /create [chat room name]" << endl;
 
 			if (receiveChatRoomListPacket.chatRoomList.empty())
 			{
@@ -298,13 +301,13 @@ void showChatRoomList(bool* hasSelectedChatRoom, string* input, bool* noErrorOcc
 				printf_s("[%d] %s\n", chatRoom.id, chatRoom.name.c_str());
 			}
 
-			cout << *input;
+			cout << input;
 		}
 		
 		this_thread::sleep_for(chrono::milliseconds(GET_CHAT_ROOM_LIST_WAIT_MS));
 	}
 }
-void getClientChatRoomNameInput(string* input)
+void getClientChatRoomNameInput(string& input)
 {
 	const int BACKSPACE = 8;
 	//const int DEL = 127; // delete
@@ -319,16 +322,20 @@ void getClientChatRoomNameInput(string* input)
 
 			c = _getch();
 
-			if (c >= ' ' && c <= '~')
+			if (c == '\'' || c == '"')
 			{
-				input->push_back(c);
+				continue;
+			}
+			else if (c >= ' ' && c <= '~')
+			{
+				input.push_back(c);
 				cout << c;
 			}
 			else if (c == BACKSPACE)
 			{
-				if (!input->empty())
+				if (!input.empty())
 				{
-					input->pop_back();
+					input.pop_back();
 					cout << '\b';
 				}
 
@@ -341,78 +348,142 @@ void getClientChatRoomNameInput(string* input)
 		}
 	}
 }
-bool joinChatRoom()
+bool createOrJoinChatRoom()
 {
-	bool hasSelectedChatRoom = false, noErrorOccur = true;
+	bool hasSelectedChatRoom = false, errorOccur = false;
 	string input = "";
 
-	thread showList(showChatRoomList, &hasSelectedChatRoom, &input, &noErrorOccur);
-	thread getInput(getClientChatRoomNameInput, &input);
+	thread showList(showChatRoomList, ref(hasSelectedChatRoom), ref(input), ref(errorOccur));
+	thread getInput(getClientChatRoomNameInput, ref(input));
 	
 	getInput.join();
 	hasSelectedChatRoom = true;
 	showList.detach();
 
-	if (!noErrorOccur)
+	if (errorOccur)
 		return false;
 
-	SelectChatRoomPacket selectChatRoomPacket(input);
-
-	if (!sendToServer(selectChatRoomPacket))
+	bool flag = false;
+	string command = "", chatRoomName = "";
+	for (char c : input)
 	{
-		restartErrorPrint("sendToServer");
-		return false;
+		if (!flag && c == ' ')
+		{
+			flag = true;
+			continue;
+		}
+			
+		if (!flag)
+			command += c;
+		else
+			chatRoomName += c;
 	}
 
-	SuccessOrFailurePacket receiveJoinRespondPacket;
-
-	if (!receiveFromServer(&receiveJoinRespondPacket))
+	if (command == "/join")
 	{
-		restartErrorPrint("receiveFromServer");
+		SelectChatRoomPacket selectChatRoomPacket(chatRoomName);
+
+		if (!sendToServer(selectChatRoomPacket))
+		{
+			restartErrorPrint("sendToServer");
+			return false;
+		}
+
+		SuccessOrFailurePacket receiveJoinRespondPacket;
+
+		if (!receiveFromServer(receiveJoinRespondPacket))
+		{
+			restartErrorPrint("receiveFromServer");
+			return false;
+		}
+
+		if (!receiveJoinRespondPacket.successOrFailureValue)
+		{
+			cout << endl << "Failed to join chat room " << chatRoomName << "... Press enter to continue..." << endl;
+			cin.get();
+			return false;
+		}
+
+		return receiveJoinRespondPacket.successOrFailureValue;
+	}
+	else if (command == "/create")
+	{
+		CreateChatRoomPacket createChatRoomPacket(chatRoomName);
+
+		if (!sendToServer(createChatRoomPacket))
+		{
+			restartErrorPrint("sendToServer");
+			return false;
+		}
+
+		SuccessOrFailurePacket receiveCreateRespondPacket;
+
+		if (!receiveFromServer(receiveCreateRespondPacket))
+		{
+			restartErrorPrint("receiveFromServer");
+			return false;
+		}
+
+		if (!receiveCreateRespondPacket.successOrFailureValue)
+		{
+			cout << endl << "Failed to create chat room " << chatRoomName << "... Press enter to continue..." << endl;
+			cin.get();
+			return false;
+		}
+
 		return false;
 	}
-
-	return receiveJoinRespondPacket.successOrFailureValue;
+	else
+	{
+		cout << " <-- unknown command" << endl;
+		cout << "Press enter to continue..." << endl;
+		cin.get();
+		return false;
+	}
 }
 #pragma endregion
 
 
 #pragma region InChatRoomProcess
 mutex inChatRoom_mutex;
-void showChatRoomMsg(bool* hasQuit, string* input, bool* noErrorOccur)
+void showChatRoomMsg(bool& hasQuit, string& input, bool& outputErrorOccur)
 {
-	while (!*hasQuit)
+	while (!hasQuit)
 	{
 		{
 			lock_guard<mutex> lock(mutex inChatRoom_mutex);
 
-			GetChatRoomMsgPacket getChatRoomMsgPacket(chatRoomMsgList.size());
+			GetChatRoomMsgPacket getChatRoomMsgPacket(nowChatRoomMsgListSize);
 
 			if (!sendToServer(getChatRoomMsgPacket))
 			{
 				restartErrorPrint("sendToServer");
-				*noErrorOccur = false;
+				outputErrorOccur = true;
 				return;
 			}
 
 			ChatRoomMsgPacket receiveChatRoomMsgPacket;
 
-			if (!receiveFromServer(&receiveChatRoomMsgPacket))
+			if (!receiveFromServer(receiveChatRoomMsgPacket))
 			{
 				restartErrorPrint("receiveFromServer");
-				*noErrorOccur = false;
+				outputErrorOccur = true;
 				return;
 			}
 
-			system("cls");
+			for (int i = 0; i < input.size(); i++)
+			{
+				cout << "\b \b";
+			}
 
 			for (int i = 0; i < receiveChatRoomMsgPacket.chatRoomMsgList.size(); i++)
 			{
 				// change format (self msg)
 				printf_s("<%s> - %s\n\n", receiveChatRoomMsgPacket.chatRoomMsgList[i].sender.c_str(), receiveChatRoomMsgPacket.chatRoomMsgList[i].msg.c_str());
+				nowChatRoomMsgListSize++;
 			}
 
-			cout << *input;
+			cout << input;
 		}
 		
 		this_thread::sleep_for(chrono::milliseconds(GET_CHAT_ROOM_MSG_WAIT_MS));
@@ -420,7 +491,7 @@ void showChatRoomMsg(bool* hasQuit, string* input, bool* noErrorOccur)
 }
 void sendChatRoomMsgToServer(string input)
 {
-	SendChatRoomMsgPacket sendChatRoomMsgPacket(ChatRoomMsg(clientAccount, input));
+	SendChatRoomMsgPacket sendChatRoomMsgPacket(clientAccount, input);
 
 	if (!sendToServer(sendChatRoomMsgPacket))
 	{
@@ -430,7 +501,7 @@ void sendChatRoomMsgToServer(string input)
 
 	SuccessOrFailurePacket receiveSendRespondPacket;
 
-	if (!receiveFromServer(&receiveSendRespondPacket))
+	if (!receiveFromServer(receiveSendRespondPacket))
 	{
 		restartErrorPrint("receiveFromServer");
 		return;
@@ -442,7 +513,7 @@ void sendChatRoomMsgToServer(string input)
 		return;
 	}
 }
-void getClientChatRoomMsgInput(string* input)
+void getClientChatRoomMsgInput(bool& hasQuit, string& input)
 {
 	const int BACKSPACE = 8;
 	//const int DEL = 127; // delete
@@ -463,14 +534,14 @@ void getClientChatRoomMsgInput(string* input)
 			}
 			else if (c >= ' ' && c <= '~')
 			{
-				input->push_back(c);
+				input.push_back(c);
 				cout << c;
 			}
 			else if (c == BACKSPACE)
 			{
-				if (!input->empty())
+				if (!input.empty())
 				{
-					input->pop_back();
+					input.pop_back();
 					cout << '\b';
 				}
 					
@@ -478,25 +549,45 @@ void getClientChatRoomMsgInput(string* input)
 			}
 			else if (c == '\r')
 			{
-				sendChatRoomMsgToServer(*input);
-				return;
+				for (int i = 0; i < input.size(); i++)
+				{
+					cout << "\b \b";
+				}
+
+				if (input.empty())
+					continue;
+
+				if (input == "/quit")
+				{
+					hasQuit = true;
+					//quit packtet
+					return;
+				}
+
+				//string temp = input;
+				sendChatRoomMsgToServer(input);// sleep or release memory
+				//input.erase(input.begin(), input.begin() + temp.size());
+
+				input = "";
 			}
 		}
 	}
 }
 bool inChatRoom()
 {
-	bool hasQuit = false, noErrorOccur = true;
+	system("cls");
+	cout << "Command: /quit" << endl;
+
+	bool hasQuit = false, errorOccur = false;
 	string input = "";
 
-	thread showMsg(showChatRoomMsg, &hasQuit, &input, &noErrorOccur);
-	thread getInput(getClientChatRoomMsgInput, &input);
+	thread showMsg(showChatRoomMsg, ref(hasQuit), ref(input), ref(errorOccur));
+	thread getInput(getClientChatRoomMsgInput, ref(hasQuit), ref(input));
 
 	getInput.join();
-	hasQuit = true;
 	showMsg.join();
 
-	if (!noErrorOccur)
+	if (hasQuit || errorOccur)
 		return false;
 
 	return true;
@@ -524,7 +615,7 @@ int main()
 		switch (status)
 		{
 		case clientStatus::initializing:
-			if (initializeWSA(&wsaData) && initializeSocket())
+			if (initializeWSA(wsaData) && initializeSocket())
 				status = clientStatus::connecting;
 			break;
 
@@ -539,7 +630,7 @@ int main()
 			break;
 
 		case clientStatus::chat_room_list:
-			if (joinChatRoom())
+			if (createOrJoinChatRoom())
 				status = clientStatus::chat_room;
 			break;
 

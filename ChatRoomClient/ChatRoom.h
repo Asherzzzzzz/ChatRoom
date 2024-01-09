@@ -6,15 +6,19 @@
 using namespace std;
 
 
+#define CHAT_BOT_API_KEY "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"
+
 
 #define SERVER_IP "202.5.254.88"
 #define SERVER_PORT 8080
 
+#define ACCEPT_WAIT_MS 1000
 #define RESTART_WAIT_MS 5000
 #define GET_CHAT_ROOM_LIST_WAIT_MS 5000
 #define GET_CHAT_ROOM_MSG_WAIT_MS 2500
 
 #define BUFF_SIZE 1024
+#define CHAT_ROOM_MSG_BUFF_SIZE 8192
 
 #define NORMAL_TOTAL_SIZE_LENGTH 2
 #define GET_CHAT_ROOM_LIST_TOTAL_SIZE_LENGTH 4
@@ -29,6 +33,7 @@ enum clientPacketId
 	send_sign_up_data,
 	get_chat_room_list,
 	select_chat_room,
+	create_chat_room,
 	get_chat_room_message,
 	send_chat_room_message
 };
